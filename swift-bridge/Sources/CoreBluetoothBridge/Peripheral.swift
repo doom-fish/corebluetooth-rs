@@ -25,10 +25,33 @@ private final class CBRustPeripheralDelegate: NSObject, CBPeripheralDelegate {
         json.withCString { callback(userInfo, $0) }
     }
 
+    func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
+        send(["event": "didUpdateName"])
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        send([
+            "event": "didModifyServices",
+            "invalidated_service_handles": invalidatedServices.map(cb_retained_handle),
+        ])
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         send([
             "event": "didDiscoverServices",
             "service_handles": (peripheral.services ?? []).map(cb_retained_handle),
+            "error": cb_optional(error.map(cb_error_object)),
+        ])
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didDiscoverIncludedServicesFor service: CBService,
+        error: Error?
+    ) {
+        send([
+            "event": "didDiscoverIncludedServicesForService",
+            "service_handle": cb_retained_handle(service),
             "error": cb_optional(error.map(cb_error_object)),
         ])
     }
@@ -82,6 +105,46 @@ private final class CBRustPeripheralDelegate: NSObject, CBPeripheralDelegate {
         ])
     }
 
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didDiscoverDescriptorsFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        send([
+            "event": "didDiscoverDescriptorsForCharacteristic",
+            "characteristic_handle": cb_retained_handle(characteristic),
+            "error": cb_optional(error.map(cb_error_object)),
+        ])
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateValueFor descriptor: CBDescriptor,
+        error: Error?
+    ) {
+        send([
+            "event": "didUpdateValueForDescriptor",
+            "descriptor_handle": cb_retained_handle(descriptor),
+            "error": cb_optional(error.map(cb_error_object)),
+        ])
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didWriteValueFor descriptor: CBDescriptor,
+        error: Error?
+    ) {
+        send([
+            "event": "didWriteValueForDescriptor",
+            "descriptor_handle": cb_retained_handle(descriptor),
+            "error": cb_optional(error.map(cb_error_object)),
+        ])
+    }
+
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        send(["event": "isReadyToSendWriteWithoutResponse"])
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         send([
             "event": "didReadRSSI",
@@ -89,42 +152,22 @@ private final class CBRustPeripheralDelegate: NSObject, CBPeripheralDelegate {
             "error": cb_optional(error.map(cb_error_object)),
         ])
     }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didOpen channel: CBL2CAPChannel?,
+        error: Error?
+    ) {
+        send([
+            "event": "didOpenL2CAPChannel",
+            "channel_handle": cb_optional(channel.map(cb_retained_handle)),
+            "error": cb_optional(error.map(cb_error_object)),
+        ])
+    }
 }
 
 private let peripheralDelegateLock = NSLock()
 private var peripheralDelegates: [ObjectIdentifier: CBRustPeripheralDelegate] = [:]
-
-private func cb_peripheral(_ ptr: UnsafeMutableRawPointer?) -> CBPeripheral? {
-    guard let ptr else {
-        return nil
-    }
-    let peripheral: CBPeripheral = cb_borrow(ptr)
-    return peripheral
-}
-
-private func cb_service(_ ptr: UnsafeMutableRawPointer?) -> CBService? {
-    guard let ptr else {
-        return nil
-    }
-    let service: CBService = cb_borrow(ptr)
-    return service
-}
-
-private func cb_characteristic(_ ptr: UnsafeMutableRawPointer?) -> CBCharacteristic? {
-    guard let ptr else {
-        return nil
-    }
-    let characteristic: CBCharacteristic = cb_borrow(ptr)
-    return characteristic
-}
-
-private func cb_descriptor(_ ptr: UnsafeMutableRawPointer?) -> CBDescriptor? {
-    guard let ptr else {
-        return nil
-    }
-    let descriptor: CBDescriptor = cb_borrow(ptr)
-    return descriptor
-}
 
 private func cb_store_peripheral_delegate(
     _ delegate: CBRustPeripheralDelegate?,
@@ -197,6 +240,11 @@ public func cb_peripheral_services(
     cb_make_pointer_array(cb_peripheral(peripheralPtr)?.services ?? [], outArray, outCount)
 }
 
+@_cdecl("cb_peripheral_can_send_write_without_response")
+public func cb_peripheral_can_send_write_without_response(_ peripheralPtr: UnsafeMutableRawPointer?) -> Bool {
+    cb_peripheral(peripheralPtr)?.canSendWriteWithoutResponse ?? false
+}
+
 @_cdecl("cb_peripheral_discover_services")
 public func cb_peripheral_discover_services(
     _ peripheralPtr: UnsafeMutableRawPointer?,
@@ -210,6 +258,27 @@ public func cb_peripheral_discover_services(
 
     do {
         peripheral.discoverServices(try cb_service_uuids(serviceUUIDsJSON))
+        return CBR_OK
+    } catch {
+        cb_write_error(errorOut, error.localizedDescription)
+        return CBR_INVALID_ARGUMENT
+    }
+}
+
+@_cdecl("cb_peripheral_discover_included_services")
+public func cb_peripheral_discover_included_services(
+    _ peripheralPtr: UnsafeMutableRawPointer?,
+    _ servicePtr: UnsafeMutableRawPointer?,
+    _ serviceUUIDsJSON: UnsafePointer<CChar>?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let peripheral = cb_peripheral(peripheralPtr), let service = cb_service(servicePtr) else {
+        cb_write_error(errorOut, "peripheral and service must not be null")
+        return CBR_INVALID_ARGUMENT
+    }
+
+    do {
+        peripheral.discoverIncludedServices(try cb_service_uuids(serviceUUIDsJSON), for: service)
         return CBR_OK
     } catch {
         cb_write_error(errorOut, error.localizedDescription)
@@ -267,6 +336,18 @@ public func cb_peripheral_read_value_for_characteristic(
     return CBR_OK
 }
 
+@_cdecl("cb_peripheral_maximum_write_value_length")
+public func cb_peripheral_maximum_write_value_length(
+    _ peripheralPtr: UnsafeMutableRawPointer?,
+    _ writeType: Int32
+) -> Int {
+    guard let peripheral = cb_peripheral(peripheralPtr) else {
+        return 0
+    }
+    let type: CBCharacteristicWriteType = writeType == 0 ? .withResponse : .withoutResponse
+    return peripheral.maximumWriteValueLength(for: type)
+}
+
 @_cdecl("cb_peripheral_write_value_for_characteristic")
 public func cb_peripheral_write_value_for_characteristic(
     _ peripheralPtr: UnsafeMutableRawPointer?,
@@ -317,75 +398,54 @@ public func cb_peripheral_discover_descriptors(
     return CBR_OK
 }
 
-@_cdecl("cb_service_uuid")
-public func cb_service_uuid(_ servicePtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    cb_service(servicePtr).flatMap { cb_string($0.uuid.uuidString) }
-}
-
-@_cdecl("cb_service_is_primary")
-public func cb_service_is_primary(_ servicePtr: UnsafeMutableRawPointer?) -> Bool {
-    cb_service(servicePtr)?.isPrimary ?? false
-}
-
-@_cdecl("cb_service_included_services")
-public func cb_service_included_services(
-    _ servicePtr: UnsafeMutableRawPointer?,
-    _ outArray: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
-    _ outCount: UnsafeMutablePointer<Int>
-) {
-    cb_make_pointer_array(cb_service(servicePtr)?.includedServices ?? [], outArray, outCount)
-}
-
-@_cdecl("cb_service_characteristics")
-public func cb_service_characteristics(
-    _ servicePtr: UnsafeMutableRawPointer?,
-    _ outArray: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
-    _ outCount: UnsafeMutablePointer<Int>
-) {
-    cb_make_pointer_array(cb_service(servicePtr)?.characteristics ?? [], outArray, outCount)
-}
-
-@_cdecl("cb_characteristic_uuid")
-public func cb_characteristic_uuid(_ characteristicPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    cb_characteristic(characteristicPtr).flatMap { cb_string($0.uuid.uuidString) }
-}
-
-@_cdecl("cb_characteristic_properties")
-public func cb_characteristic_properties(_ characteristicPtr: UnsafeMutableRawPointer?) -> UInt64 {
-    UInt64(cb_characteristic(characteristicPtr)?.properties.rawValue ?? 0)
-}
-
-@_cdecl("cb_characteristic_value_json")
-public func cb_characteristic_value_json(_ characteristicPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    guard let characteristic = cb_characteristic(characteristicPtr), let value = characteristic.value else {
-        return nil
+@_cdecl("cb_peripheral_read_value_for_descriptor")
+public func cb_peripheral_read_value_for_descriptor(
+    _ peripheralPtr: UnsafeMutableRawPointer?,
+    _ descriptorPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let peripheral = cb_peripheral(peripheralPtr), let descriptor = cb_descriptor(descriptorPtr) else {
+        cb_write_error(errorOut, "peripheral and descriptor must not be null")
+        return CBR_INVALID_ARGUMENT
     }
-    return cb_string(cb_json_string([UInt8](value)))
+
+    peripheral.readValue(for: descriptor)
+    return CBR_OK
 }
 
-@_cdecl("cb_characteristic_is_notifying")
-public func cb_characteristic_is_notifying(_ characteristicPtr: UnsafeMutableRawPointer?) -> Bool {
-    cb_characteristic(characteristicPtr)?.isNotifying ?? false
-}
-
-@_cdecl("cb_characteristic_descriptors")
-public func cb_characteristic_descriptors(
-    _ characteristicPtr: UnsafeMutableRawPointer?,
-    _ outArray: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
-    _ outCount: UnsafeMutablePointer<Int>
-) {
-    cb_make_pointer_array(cb_characteristic(characteristicPtr)?.descriptors ?? [], outArray, outCount)
-}
-
-@_cdecl("cb_descriptor_uuid")
-public func cb_descriptor_uuid(_ descriptorPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    cb_descriptor(descriptorPtr).flatMap { cb_string($0.uuid.uuidString) }
-}
-
-@_cdecl("cb_descriptor_value_json")
-public func cb_descriptor_value_json(_ descriptorPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    guard let descriptor = cb_descriptor(descriptorPtr), let value = descriptor.value else {
-        return nil
+@_cdecl("cb_peripheral_write_value_for_descriptor")
+public func cb_peripheral_write_value_for_descriptor(
+    _ peripheralPtr: UnsafeMutableRawPointer?,
+    _ descriptorPtr: UnsafeMutableRawPointer?,
+    _ bytes: UnsafePointer<UInt8>?,
+    _ length: Int,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let peripheral = cb_peripheral(peripheralPtr), let descriptor = cb_descriptor(descriptorPtr), let bytes else {
+        cb_write_error(errorOut, "peripheral, descriptor, and value bytes must not be null")
+        return CBR_INVALID_ARGUMENT
     }
-    return cb_string(cb_json_string(value))
+
+    peripheral.writeValue(Data(bytes: bytes, count: length), for: descriptor)
+    return CBR_OK
+}
+
+@_cdecl("cb_peripheral_open_l2cap_channel")
+public func cb_peripheral_open_l2cap_channel(
+    _ peripheralPtr: UnsafeMutableRawPointer?,
+    _ psm: UInt16,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let peripheral = cb_peripheral(peripheralPtr) else {
+        cb_write_error(errorOut, "peripheral must not be null")
+        return CBR_INVALID_ARGUMENT
+    }
+
+    if #available(macOS 10.14, *) {
+        peripheral.openL2CAPChannel(psm)
+        return CBR_OK
+    }
+
+    cb_write_error(errorOut, "opening L2CAP channels requires macOS 10.14 or newer")
+    return CBR_FRAMEWORK_ERROR
 }

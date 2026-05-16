@@ -23,6 +23,13 @@ public func cb_object_release(_ ptr: UnsafeMutableRawPointer?) {
     Unmanaged<AnyObject>.fromOpaque(ptr).release()
 }
 
+@_cdecl("cb_object_retain")
+public func cb_object_retain(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
+    guard let ptr else { return nil }
+    _ = Unmanaged<AnyObject>.fromOpaque(ptr).retain()
+    return ptr
+}
+
 @_cdecl("cb_pointer_array_free")
 public func cb_pointer_array_free(_ array: UnsafeMutableRawPointer?, _ count: Int) {
     guard let array else { return }
@@ -174,4 +181,137 @@ func cb_make_pointer_array<T: AnyObject>(
     }
     outArray.pointee = UnsafeMutableRawPointer(buffer)
     outCount.pointee = objects.count
+}
+
+func cb_borrow_objects<T: AnyObject>(
+    _ array: UnsafePointer<UnsafeMutableRawPointer?>?,
+    count: Int,
+    cast: (UnsafeMutableRawPointer?) -> T?
+) -> [T] {
+    guard let array, count > 0 else {
+        return []
+    }
+
+    return UnsafeBufferPointer(start: array, count: count)
+        .compactMap { cast($0) }
+}
+
+func cb_peripheral(_ ptr: UnsafeMutableRawPointer?) -> CBPeripheral? {
+    guard let ptr else {
+        return nil
+    }
+    let peripheral: CBPeripheral = cb_borrow(ptr)
+    return peripheral
+}
+
+func cb_service(_ ptr: UnsafeMutableRawPointer?) -> CBService? {
+    guard let ptr else {
+        return nil
+    }
+    let service: CBService = cb_borrow(ptr)
+    return service
+}
+
+func cb_mutable_service(_ ptr: UnsafeMutableRawPointer?) -> CBMutableService? {
+    guard let ptr else {
+        return nil
+    }
+    let service: CBMutableService = cb_borrow(ptr)
+    return service
+}
+
+func cb_characteristic(_ ptr: UnsafeMutableRawPointer?) -> CBCharacteristic? {
+    guard let ptr else {
+        return nil
+    }
+    let characteristic: CBCharacteristic = cb_borrow(ptr)
+    return characteristic
+}
+
+func cb_mutable_characteristic(_ ptr: UnsafeMutableRawPointer?) -> CBMutableCharacteristic? {
+    guard let ptr else {
+        return nil
+    }
+    let characteristic: CBMutableCharacteristic = cb_borrow(ptr)
+    return characteristic
+}
+
+func cb_descriptor(_ ptr: UnsafeMutableRawPointer?) -> CBDescriptor? {
+    guard let ptr else {
+        return nil
+    }
+    let descriptor: CBDescriptor = cb_borrow(ptr)
+    return descriptor
+}
+
+func cb_mutable_descriptor(_ ptr: UnsafeMutableRawPointer?) -> CBMutableDescriptor? {
+    guard let ptr else {
+        return nil
+    }
+    let descriptor: CBMutableDescriptor = cb_borrow(ptr)
+    return descriptor
+}
+
+func cb_uuid(_ ptr: UnsafeMutableRawPointer?) -> CBUUID? {
+    guard let ptr else {
+        return nil
+    }
+    let uuid: CBUUID = cb_borrow(ptr)
+    return uuid
+}
+
+func cb_l2cap_channel(_ ptr: UnsafeMutableRawPointer?) -> CBL2CAPChannel? {
+    guard let ptr else {
+        return nil
+    }
+    let channel: CBL2CAPChannel = cb_borrow(ptr)
+    return channel
+}
+
+func cb_central(_ ptr: UnsafeMutableRawPointer?) -> CBCentral? {
+    guard let ptr else {
+        return nil
+    }
+    let central: CBCentral = cb_borrow(ptr)
+    return central
+}
+
+func cb_att_request(_ ptr: UnsafeMutableRawPointer?) -> CBATTRequest? {
+    guard let ptr else {
+        return nil
+    }
+    let request: CBATTRequest = cb_borrow(ptr)
+    return request
+}
+
+func cb_peer(_ ptr: UnsafeMutableRawPointer?) -> CBPeer? {
+    guard let ptr else {
+        return nil
+    }
+    let peer: CBPeer = cb_borrow(ptr)
+    return peer
+}
+
+func cb_stream(_ ptr: UnsafeMutableRawPointer?) -> Stream? {
+    guard let ptr else {
+        return nil
+    }
+    let stream: Stream = cb_borrow(ptr)
+    return stream
+}
+
+func cb_input_stream(_ ptr: UnsafeMutableRawPointer?) -> InputStream? {
+    guard let ptr else {
+        return nil
+    }
+    let stream: InputStream = cb_borrow(ptr)
+    return stream
+}
+
+func cb_output_stream(_ ptr: UnsafeMutableRawPointer?) -> OutputStream? {
+    guard let ptr else {
+        return nil
+    }
+    let stream: OutputStream = cb_borrow(ptr)
+    return stream
 }

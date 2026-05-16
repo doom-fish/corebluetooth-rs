@@ -13,6 +13,53 @@ pub struct BluetoothErrorInfo {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum BluetoothErrorCode {
+    Unknown = 0,
+    InvalidParameters = 1,
+    InvalidHandle = 2,
+    NotConnected = 3,
+    OutOfSpace = 4,
+    OperationCancelled = 5,
+    ConnectionTimeout = 6,
+    PeripheralDisconnected = 7,
+    UuidNotAllowed = 8,
+    AlreadyAdvertising = 9,
+    ConnectionFailed = 10,
+    ConnectionLimitReached = 11,
+    UnknownDevice = 12,
+    OperationNotSupported = 13,
+    PeerRemovedPairingInformation = 14,
+    EncryptionTimedOut = 15,
+    TooManyLePairedDevices = 16,
+}
+
+impl BluetoothErrorCode {
+    #[must_use]
+    pub const fn from_raw(raw: i32) -> Self {
+        match raw {
+            1 => Self::InvalidParameters,
+            2 => Self::InvalidHandle,
+            3 => Self::NotConnected,
+            4 => Self::OutOfSpace,
+            5 => Self::OperationCancelled,
+            6 => Self::ConnectionTimeout,
+            7 => Self::PeripheralDisconnected,
+            8 => Self::UuidNotAllowed,
+            9 => Self::AlreadyAdvertising,
+            10 => Self::ConnectionFailed,
+            11 => Self::ConnectionLimitReached,
+            12 => Self::UnknownDevice,
+            13 => Self::OperationNotSupported,
+            14 => Self::PeerRemovedPairingInformation,
+            15 => Self::EncryptionTimedOut,
+            16 => Self::TooManyLePairedDevices,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CoreBluetoothError {

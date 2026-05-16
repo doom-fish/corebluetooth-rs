@@ -1,55 +1,58 @@
 # corebluetooth
 
-Safe, idiomatic Rust bindings for Apple's [CoreBluetooth](https://developer.apple.com/documentation/corebluetooth) framework — create BLE central managers, inspect peripheral/service/characteristic state, and receive delegate-driven events on macOS.
+Safe, idiomatic Rust bindings for Apple's [CoreBluetooth](https://developer.apple.com/documentation/corebluetooth) framework on macOS.
+
+Version `0.2.0` extends the original central/client surface with peripheral/server APIs, mutable GATT builders, typed advertisement and UUID helpers, ATT request wrappers, and L2CAP channel metadata.
 
 ## Features
 
-- **Central manager control** — `CentralManager` wraps state inspection, scanning, connect/cancel flows, and peripheral retrieval APIs.
-- **Peripheral access** — `Peripheral`, `Service`, `Characteristic`, and `Descriptor` expose names, UUIDs, connection state, services, characteristic properties, values, and descriptor values.
-- **Delegate callbacks** — `CentralManagerDelegate` / `CentralManagerCallbacks` and `PeripheralDelegate` / `PeripheralCallbacks` translate `CoreBluetooth` delegate events into Rust closures.
-- **Read / write / notify** — discover services and characteristics, read RSSI, read characteristic values, write characteristic values, toggle notifications, and discover descriptors.
-- **Queue-backed managers** — the Swift bridge creates a dedicated dispatch queue by default so CLI programs can observe state changes without an app run loop.
+- **Central manager APIs** — `CentralManager`, `CentralManagerOptions`, `ScanOptions`, `ConnectOptions`, restore-state callbacks, and connection lifecycle delegates.
+- **Peripheral manager APIs** — `PeripheralManager`, `PeripheralManagerOptions`, advertising control, service publication, ATT responses, subscriber updates, and L2CAP publication.
+- **Remote peripheral APIs** — `Peripheral`, `Service`, `Characteristic`, and `Descriptor` wrappers covering discovery, reads, writes, notify state, descriptor access, and L2CAP opening.
+- **Local GATT builders** — `MutableService`, `MutableCharacteristic`, and `MutableDescriptor` for building publishable services entirely from Rust.
+- **Typed helpers** — `BluetoothUuid`, `AdvertisementData`, `AttRequest`, `AttError`, `Central`, `L2capChannel`, `Peer`, `InputStreamHandle`, and `OutputStreamHandle`.
+- **Headless examples and tests** — 13 examples and 12 integration tests that run successfully on a CLI macOS host without publishing or requiring a GUI window.
 
 ## Requirements
 
 - macOS 10.13 or newer
-- Xcode 15+ with the macOS SDK
-- For scanning or connecting in GUI apps, `NSBluetoothAlwaysUsageDescription` in your app's `Info.plist`
+- Xcode with the macOS SDK and Swift toolchain
+- For real scanning, connecting, advertising, or GATT server use in GUI apps, the appropriate Bluetooth usage description/background modes in your app bundle
 
 ## Installation
 
 ```toml
 [dependencies]
-corebluetooth-rs = "0.1.0"
+corebluetooth-rs = "0.2.0"
 ```
 
-```rust,no_run
-use corebluetooth::prelude::*;
-use std::thread;
-use std::time::Duration;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let manager = CentralManager::new()?;
-    thread::sleep(Duration::from_secs(2));
-    println!("state: {:?}", manager.state());
-    println!("authorization: {:?}", manager.authorization());
-    Ok(())
-}
-```
-
-## Smoke example
+## Quick examples
 
 ```bash
 cargo run --example 01_smoke
+cargo run --example 03_peripheral_manager_state
+cargo run --example 12_mutable_service_build
 ```
 
-The smoke example creates a `CentralManager`, waits two seconds for `centralManagerDidUpdateState`, prints the resulting state and authorization, and exits without scanning or requesting Bluetooth permission.
+Representative examples:
 
-## Notes
+- `01_smoke` — create a central manager and print state/authorization.
+- `03_peripheral_manager_state` — create a peripheral manager and inspect server-role state.
+- `05_service_roundtrip` / `06_characteristic_roundtrip` / `07_descriptor_roundtrip` — exercise immutable GATT wrappers using local mutable builders.
+- `08_att_constants` / `09_l2cap_channel_types` / `10_advertisement_builder` / `11_uuid_roundtrip` — cover helper areas without requiring BLE hardware.
+- `12_mutable_service_build` / `13_mutable_characteristic_build` — build publishable local services and characteristics from Rust.
 
-- Discovery, connection, and characteristic updates arrive asynchronously on the dispatch queue used to create the `CentralManager`.
-- `CBPeripheralManager` (peripheral/server role) is intentionally deferred to a future release.
-- Advertisement data is surfaced as `serde_json::Value` so the bridge can preserve Apple's heterogenous dictionary structure without losing information.
+## Testing
+
+```bash
+cargo clippy --all-targets -- -D warnings
+cargo test
+for ex in examples/*.rs; do cargo run --example "$(basename "$ex" .rs)"; done
+```
+
+## Coverage notes
+
+See [`COVERAGE.md`](COVERAGE.md) for the framework-by-framework audit, including implemented APIs, intentionally skipped iOS-only members, and deprecated macOS-only symbols left out of the safe surface.
 
 ## License
 

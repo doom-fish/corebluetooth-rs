@@ -1,11 +1,11 @@
 [package]
 name = "corebluetooth-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/doom-fish/corebluetooth-rs"
 repository = "https://github.com/doom-fish/corebluetooth-rs"
-description = "Safe Rust bindings for Apple's CoreBluetooth framework — Bluetooth Low Energy central/client APIs on macOS"
+description = "Safe Rust bindings for Apple's CoreBluetooth framework — central/client and peripheral/server BLE APIs on macOS"
 authors = ["Per Johansson <per@doom.fish>"]
 keywords = ["corebluetooth", "ble", "bluetooth", "macos", "apple"]
 categories = ["api-bindings", "os::macos-apis"]
@@ -17,11 +17,13 @@ include = [
     "swift-bridge/Package.swift",
     "swift-bridge/Sources/**/*",
     "examples/**/*",
+    "tests/**/*",
     "build.rs",
     "Cargo.toml",
     "README.md",
     "LICENSE-*",
     "CHANGELOG.md",
+    "COVERAGE.md",
 ]
 
 [lints.rust]
