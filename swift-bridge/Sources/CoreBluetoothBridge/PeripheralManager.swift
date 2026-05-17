@@ -413,3 +413,7 @@ public func cb_central_identifier(_ centralPtr: UnsafeMutableRawPointer?) -> Uns
 public func cb_central_maximum_update_value_length(_ centralPtr: UnsafeMutableRawPointer?) -> Int {
     cb_central(centralPtr)?.maximumUpdateValueLength ?? 0
 }
+
+func cb_peripheral_manager_get_manager(_ ptr: UnsafeMutableRawPointer?) -> CBPeripheralManager? {
+    cb_peripheral_manager_box(ptr)?.manager
+}

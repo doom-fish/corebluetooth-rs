@@ -1,5 +1,7 @@
 #![allow(missing_docs)]
 
+#[cfg(feature = "async")]
+pub mod async_stream;
 pub mod att;
 pub mod central_manager;
 pub mod characteristic;
@@ -14,6 +16,8 @@ pub mod peripheral_manager;
 pub mod service;
 pub mod uuid;
 
+#[cfg(feature = "async")]
+pub use async_stream::*;
 pub use att::*;
 pub use central_manager::*;
 pub use characteristic::*;

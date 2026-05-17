@@ -378,3 +378,7 @@ public func cb_manager_retrieve_peripherals_with_identifiers(
         return CBR_INVALID_ARGUMENT
     }
 }
+
+func cb_central_manager_get_manager(_ ptr: UnsafeMutableRawPointer?) -> CBCentralManager? {
+    cb_manager_box(ptr)?.manager
+}

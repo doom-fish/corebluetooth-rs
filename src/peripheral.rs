@@ -163,7 +163,8 @@ type DescriptorDiscoveryHandler =
     Box<dyn FnMut(Characteristic, Option<BluetoothErrorInfo>) + Send + 'static>;
 type ReadyHandler = Box<dyn FnMut() + Send + 'static>;
 type RssiHandler = Box<dyn FnMut(i32, Option<BluetoothErrorInfo>) + Send + 'static>;
-type L2capHandler = Box<dyn FnMut(Option<L2capChannel>, Option<BluetoothErrorInfo>) + Send + 'static>;
+type L2capHandler =
+    Box<dyn FnMut(Option<L2capChannel>, Option<BluetoothErrorInfo>) + Send + 'static>;
 
 #[allow(clippy::type_complexity)]
 #[must_use]
@@ -571,7 +572,9 @@ unsafe extern "C" fn peripheral_event_trampoline(
             }
             "didOpenL2CAPChannel" => {
                 delegate.did_open_l2cap_channel(
-                    payload.channel_handle.map(L2capChannel::from_retained_handle),
+                    payload
+                        .channel_handle
+                        .map(L2capChannel::from_retained_handle),
                     payload.error,
                 );
             }
@@ -590,6 +593,10 @@ impl Peripheral {
 
     pub(crate) fn from_retained_handle(handle: u64) -> Self {
         Self::from_retained_raw(retained_handle_to_raw(handle))
+    }
+
+    pub(crate) const fn as_raw(&self) -> *mut c_void {
+        self.raw
     }
 
     pub fn set_delegate<D>(&mut self, delegate: D) -> Result<(), CoreBluetoothError>

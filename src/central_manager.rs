@@ -573,14 +573,18 @@ impl CentralManager {
         options: CentralManagerOptions,
         delegate: Option<Box<dyn CentralManagerDelegate>>,
     ) -> Result<Self, CoreBluetoothError> {
-        let options_json = to_cstring(&serde_json::to_string(&CentralManagerOptionsPayload {
-            queue_label: options.queue_label,
-            show_power_alert: options.show_power_alert,
-            restore_identifier: options.restore_identifier,
-        })
-        .map_err(|error| {
-            CoreBluetoothError::FrameworkError(format!("failed to encode manager options: {error}"))
-        })?)?;
+        let options_json = to_cstring(
+            &serde_json::to_string(&CentralManagerOptionsPayload {
+                queue_label: options.queue_label,
+                show_power_alert: options.show_power_alert,
+                restore_identifier: options.restore_identifier,
+            })
+            .map_err(|error| {
+                CoreBluetoothError::FrameworkError(format!(
+                    "failed to encode manager options: {error}"
+                ))
+            })?,
+        )?;
 
         let mut raw = core::ptr::null_mut();
         let mut error = core::ptr::null_mut();
@@ -610,10 +614,17 @@ impl CentralManager {
             )
         };
         if status == ffi::status::OK {
-            Ok(Self { raw, callback_state })
+            Ok(Self {
+                raw,
+                callback_state,
+            })
         } else {
             Err(from_swift(status, error))
         }
+    }
+
+    pub(crate) const fn as_raw(&self) -> *mut c_void {
+        self.raw
     }
 
     pub fn state(&self) -> CentralManagerState {

@@ -134,7 +134,7 @@ impl MutableCharacteristic {
     pub fn subscribed_centrals(&self) -> Vec<Central> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_mutable_characteristic_subscribed_centrals(self.raw, &mut array, &mut count) };
+        unsafe { ffi::cb_mutable_characteristic_subscribed_centrals(self.raw, &mut array, &mut count); }
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Central::from_retained_raw)

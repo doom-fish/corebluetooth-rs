@@ -209,7 +209,8 @@ type SubscriptionHandler = Box<dyn FnMut(Central, Characteristic) + Send + 'stat
 type ReadRequestHandler = Box<dyn FnMut(AttRequest) + Send + 'static>;
 type WriteRequestsHandler = Box<dyn FnMut(Vec<AttRequest>) + Send + 'static>;
 type L2capPublishHandler = Box<dyn FnMut(u16, Option<BluetoothErrorInfo>) + Send + 'static>;
-type L2capOpenHandler = Box<dyn FnMut(Option<L2capChannel>, Option<BluetoothErrorInfo>) + Send + 'static>;
+type L2capOpenHandler =
+    Box<dyn FnMut(Option<L2capChannel>, Option<BluetoothErrorInfo>) + Send + 'static>;
 
 #[allow(clippy::type_complexity)]
 #[must_use]
@@ -515,16 +516,17 @@ unsafe extern "C" fn peripheral_manager_event_trampoline(
                     .map(AttRequest::from_retained_handle)
                     .collect(),
             ),
-            "didPublishL2CAPChannel" => delegate.did_publish_l2cap_channel(
-                payload.psm.unwrap_or_default(),
-                payload.error,
-            ),
-            "didUnpublishL2CAPChannel" => delegate.did_unpublish_l2cap_channel(
-                payload.psm.unwrap_or_default(),
-                payload.error,
-            ),
+            "didPublishL2CAPChannel" => {
+                delegate.did_publish_l2cap_channel(payload.psm.unwrap_or_default(), payload.error);
+            }
+            "didUnpublishL2CAPChannel" => {
+                delegate
+                    .did_unpublish_l2cap_channel(payload.psm.unwrap_or_default(), payload.error);
+            }
             "didOpenL2CAPChannel" => delegate.did_open_l2cap_channel(
-                payload.channel_handle.map(L2capChannel::from_retained_handle),
+                payload
+                    .channel_handle
+                    .map(L2capChannel::from_retained_handle),
                 payload.error,
             ),
             _ => {}
@@ -545,7 +547,10 @@ impl PeripheralManager {
     where
         D: PeripheralManagerDelegate + 'static,
     {
-        Self::new_inner(PeripheralManagerOptions::default(), Some(Box::new(delegate)))
+        Self::new_inner(
+            PeripheralManagerOptions::default(),
+            Some(Box::new(delegate)),
+        )
     }
 
     pub fn with_callbacks(
@@ -599,10 +604,17 @@ impl PeripheralManager {
             )
         };
         if status == ffi::status::OK {
-            Ok(Self { raw, callback_state })
+            Ok(Self {
+                raw,
+                callback_state,
+            })
         } else {
             Err(from_swift(status, error))
         }
+    }
+
+    pub(crate) const fn as_raw(&self) -> *mut c_void {
+        self.raw
     }
 
     pub fn state(&self) -> PeripheralManagerState {
@@ -610,7 +622,9 @@ impl PeripheralManager {
     }
 
     pub fn authorization(&self) -> ManagerAuthorization {
-        ManagerAuthorization::from_raw(unsafe { ffi::cb_peripheral_manager_authorization(self.raw) })
+        ManagerAuthorization::from_raw(unsafe {
+            ffi::cb_peripheral_manager_authorization(self.raw)
+        })
     }
 
     pub fn is_advertising(&self) -> bool {
@@ -664,7 +678,8 @@ impl PeripheralManager {
 
     pub fn add_service(&self, service: &MutableService) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
-        let status = unsafe { ffi::cb_peripheral_manager_add_service(self.raw, service.raw, &mut error) };
+        let status =
+            unsafe { ffi::cb_peripheral_manager_add_service(self.raw, service.raw, &mut error) };
         if status == ffi::status::OK {
             Ok(())
         } else {

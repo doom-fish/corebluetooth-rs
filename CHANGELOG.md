@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0] - 2026-05-17
+
+### Added
+
+- `async` cargo feature enabling executor-agnostic `BoundedAsyncStream`-based event streams.
+- `async_api::CentralManagerEventStream` — streams `CBCentralManagerDelegate` events: state changes, peripheral discovered/connected/failed/disconnected.
+- `async_api::PeripheralEventStream` — streams all `CBPeripheralDelegate` events: service/characteristic/descriptor discovery, value updates, write confirmations, RSSI reads, and L2CAP channels.
+- `async_api::PeripheralManagerEventStream` — streams `CBPeripheralManagerDelegate` events: state changes, advertising, service add, ATT requests, and L2CAP publish/open events.
+- Example `examples/14_async_central.rs` demonstrating async state-change streaming.
+- Integration tests in `tests/async_stream_tests.rs`.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added

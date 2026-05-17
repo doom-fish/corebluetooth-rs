@@ -17,6 +17,9 @@
 )]
 
 pub mod advertisement;
+#[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+pub mod async_api;
 pub mod att;
 pub mod central;
 pub mod central_manager;
@@ -29,9 +32,9 @@ pub mod mutable_characteristic;
 pub mod mutable_service;
 pub mod peripheral;
 pub mod peripheral_manager;
+mod private;
 pub mod service;
 pub mod uuid;
-mod private;
 
 pub use advertisement::AdvertisementData;
 pub use att::{AttError, AttRequest};
@@ -45,12 +48,12 @@ pub use characteristic::{
 };
 pub use descriptor::{Descriptor, DescriptorValue, MutableDescriptor};
 pub use error::{BluetoothErrorCode, BluetoothErrorInfo, CoreBluetoothError};
-pub use l2cap_channel::{
-    InputStreamHandle, L2capChannel, OutputStreamHandle, Peer, StreamStatus,
-};
+pub use l2cap_channel::{InputStreamHandle, L2capChannel, OutputStreamHandle, Peer, StreamStatus};
 pub use mutable_characteristic::MutableCharacteristic;
 pub use mutable_service::MutableService;
-pub use peripheral::{Peripheral, PeripheralCallbacks, PeripheralDelegate, PeripheralState, Service};
+pub use peripheral::{
+    Peripheral, PeripheralCallbacks, PeripheralDelegate, PeripheralState, Service,
+};
 pub use peripheral_manager::{
     Central, PeripheralManager, PeripheralManagerCallbacks, PeripheralManagerConnectionLatency,
     PeripheralManagerDelegate, PeripheralManagerOptions, PeripheralManagerRestoredState,
@@ -77,11 +80,13 @@ pub mod prelude {
     };
     pub use crate::mutable_characteristic::MutableCharacteristic;
     pub use crate::mutable_service::MutableService;
-    pub use crate::peripheral::{Peripheral, PeripheralCallbacks, PeripheralDelegate, PeripheralState, Service};
+    pub use crate::peripheral::{
+        Peripheral, PeripheralCallbacks, PeripheralDelegate, PeripheralState, Service,
+    };
     pub use crate::peripheral_manager::{
-        Central, PeripheralManager, PeripheralManagerCallbacks,
-        PeripheralManagerConnectionLatency, PeripheralManagerDelegate, PeripheralManagerOptions,
-        PeripheralManagerRestoredState, PeripheralManagerState,
+        Central, PeripheralManager, PeripheralManagerCallbacks, PeripheralManagerConnectionLatency,
+        PeripheralManagerDelegate, PeripheralManagerOptions, PeripheralManagerRestoredState,
+        PeripheralManagerState,
     };
     pub use crate::uuid::BluetoothUuid;
 }
