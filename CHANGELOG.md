@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1] - 2026-05-17
+
+### Fixed
+
+- Added `doom_fish_utils::panic_safe::catch_user_panic` to all three async `extern "C"` event callbacks (`central_manager_event_cb`, `peripheral_event_cb`, `peripheral_manager_event_cb`). Panics inside serde deserialisation or event construction would previously unwind across the FFI boundary — undefined behaviour. The non-async trampolines already used `catch_unwind`; the async callbacks were missing it.
+- Added `SAFETY:` comments to every `unsafe` block in `src/async_api.rs` (subscribe calls, Drop unsubscribe calls, Box::from_raw calls, and ctx/payload pointer dereferences in the callbacks).
+- Widened `doom-fish-utils` version requirement from `"0.1"` to `">=0.1, <0.3"` to allow the next minor release without a forced upgrade.
+
 ## [0.3.0] - 2026-05-17
 
 ### Added
