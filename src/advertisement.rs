@@ -60,7 +60,8 @@ impl AdvertisementData {
         let manufacturer_data = object
             .get("kCBAdvDataManufacturerData")
             .and_then(bytes_from_value);
-        let overflow_service_uuids = parse_uuid_array(object.get("kCBAdvDataOverflowServiceUUIDs"))?;
+        let overflow_service_uuids =
+            parse_uuid_array(object.get("kCBAdvDataOverflowServiceUUIDs"))?;
         let is_connectable = object
             .get("kCBAdvDataIsConnectable")
             .and_then(Value::as_bool);
@@ -149,7 +150,9 @@ fn parse_service_data(value: Option<&Value>) -> HashMap<String, Vec<u8>> {
         .map(|object| {
             object
                 .iter()
-                .filter_map(|(key, value)| bytes_from_value(value).map(|bytes| (key.clone(), bytes)))
+                .filter_map(|(key, value)| {
+                    bytes_from_value(value).map(|bytes| (key.clone(), bytes))
+                })
                 .collect()
         })
         .unwrap_or_default()

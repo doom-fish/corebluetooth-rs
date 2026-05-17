@@ -156,11 +156,15 @@ impl L2capChannel {
     }
 
     pub fn input_stream(&self) -> InputStreamHandle {
-        InputStreamHandle::from_retained_raw(unsafe { ffi::cb_l2cap_channel_input_stream(self.raw) })
+        InputStreamHandle::from_retained_raw(unsafe {
+            ffi::cb_l2cap_channel_input_stream(self.raw)
+        })
     }
 
     pub fn output_stream(&self) -> OutputStreamHandle {
-        OutputStreamHandle::from_retained_raw(unsafe { ffi::cb_l2cap_channel_output_stream(self.raw) })
+        OutputStreamHandle::from_retained_raw(unsafe {
+            ffi::cb_l2cap_channel_output_stream(self.raw)
+        })
     }
 }
 

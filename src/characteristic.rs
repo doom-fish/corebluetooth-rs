@@ -3,7 +3,9 @@ use core::ffi::c_void;
 use crate::descriptor::Descriptor;
 use crate::error::{take_owned_c_string, CoreBluetoothError};
 use crate::ffi;
-use crate::private::{decode_optional_json, retain_raw, retained_handle_to_raw, take_retained_pointer_array};
+use crate::private::{
+    decode_optional_json, retain_raw, retained_handle_to_raw, take_retained_pointer_array,
+};
 use crate::service::Service;
 use crate::uuid::BluetoothUuid;
 

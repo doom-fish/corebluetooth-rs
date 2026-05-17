@@ -3,8 +3,8 @@ use core::ffi::c_void;
 use crate::characteristic::Characteristic;
 use crate::error::{from_swift, CoreBluetoothError};
 use crate::ffi;
-use crate::private::{retain_raw, retained_handle_to_raw};
 use crate::mutable_characteristic::MutableCharacteristic;
+use crate::private::{retain_raw, retained_handle_to_raw};
 use crate::service::Service;
 use crate::uuid::BluetoothUuid;
 
@@ -24,7 +24,8 @@ impl MutableService {
     pub fn new(uuid: &BluetoothUuid, is_primary: bool) -> Result<Self, CoreBluetoothError> {
         let mut raw = core::ptr::null_mut();
         let mut error = core::ptr::null_mut();
-        let status = unsafe { ffi::cb_mutable_service_new(uuid.raw, is_primary, &mut raw, &mut error) };
+        let status =
+            unsafe { ffi::cb_mutable_service_new(uuid.raw, is_primary, &mut raw, &mut error) };
         if status == ffi::status::OK {
             Ok(Self { raw })
         } else {
@@ -56,10 +57,7 @@ impl MutableService {
         self.as_service().characteristics()
     }
 
-    pub fn set_included_services(
-        &mut self,
-        services: &[&Self],
-    ) -> Result<(), CoreBluetoothError> {
+    pub fn set_included_services(&mut self, services: &[&Self]) -> Result<(), CoreBluetoothError> {
         let services: Vec<*mut c_void> = services.iter().map(|service| service.raw).collect();
         let mut error = core::ptr::null_mut();
         let status = unsafe {

@@ -64,7 +64,9 @@ impl MutableCharacteristic {
     }
 
     pub fn permissions(&self) -> AttributePermissions {
-        AttributePermissions::from_bits(unsafe { ffi::cb_mutable_characteristic_permissions(self.raw) })
+        AttributePermissions::from_bits(unsafe {
+            ffi::cb_mutable_characteristic_permissions(self.raw)
+        })
     }
 
     pub fn set_permissions(&mut self, permissions: AttributePermissions) {
@@ -93,7 +95,10 @@ impl MutableCharacteristic {
         &mut self,
         descriptors: &[&MutableDescriptor],
     ) -> Result<(), CoreBluetoothError> {
-        let descriptors: Vec<*mut c_void> = descriptors.iter().map(|descriptor| descriptor.raw).collect();
+        let descriptors: Vec<*mut c_void> = descriptors
+            .iter()
+            .map(|descriptor| descriptor.raw)
+            .collect();
         let mut error = core::ptr::null_mut();
         let status = unsafe {
             ffi::cb_mutable_characteristic_set_descriptors(
@@ -114,7 +119,10 @@ impl MutableCharacteristic {
         &mut self,
         descriptors: &[&Descriptor],
     ) -> Result<(), CoreBluetoothError> {
-        let descriptors: Vec<*mut c_void> = descriptors.iter().map(|descriptor| descriptor.raw).collect();
+        let descriptors: Vec<*mut c_void> = descriptors
+            .iter()
+            .map(|descriptor| descriptor.raw)
+            .collect();
         let mut error = core::ptr::null_mut();
         let status = unsafe {
             ffi::cb_mutable_characteristic_set_descriptors(
@@ -134,7 +142,9 @@ impl MutableCharacteristic {
     pub fn subscribed_centrals(&self) -> Vec<Central> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_mutable_characteristic_subscribed_centrals(self.raw, &mut array, &mut count); }
+        unsafe {
+            ffi::cb_mutable_characteristic_subscribed_centrals(self.raw, &mut array, &mut count);
+        }
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Central::from_retained_raw)

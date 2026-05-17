@@ -9,6 +9,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     thread::sleep(Duration::from_millis(200));
     println!("state = {:?}", manager.state());
     println!("authorization = {:?}", manager.authorization());
-    println!("current_authorization = {:?}", CentralManager::current_authorization());
+    println!(
+        "current_authorization = {:?}",
+        CentralManager::current_authorization()
+    );
     Ok(())
 }

@@ -8,7 +8,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "kCBAdvDataIsConnectable": true,
     }))?;
     println!("local_name = {:?}", advertisement.local_name());
-    println!("service_uuid_count = {}", advertisement.service_uuids().len());
+    println!(
+        "service_uuid_count = {}",
+        advertisement.service_uuids().len()
+    );
     println!("is_connectable = {:?}", advertisement.is_connectable());
     Ok(())
 }

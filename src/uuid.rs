@@ -30,7 +30,9 @@ impl BluetoothUuid {
 
     pub fn from_string(value: &str) -> Result<Self, CoreBluetoothError> {
         let value = to_cstring(value)?;
-        Ok(Self::from_retained_raw(unsafe { ffi::cb_uuid_new_from_string(value.as_ptr()) }))
+        Ok(Self::from_retained_raw(unsafe {
+            ffi::cb_uuid_new_from_string(value.as_ptr())
+        }))
     }
 
     pub fn from_uuid_string(value: &str) -> Result<Self, CoreBluetoothError> {
@@ -47,7 +49,8 @@ impl BluetoothUuid {
 
     fn constant(kind: i32) -> Self {
         let value = take_owned_c_string(unsafe { ffi::cb_uuid_constant_string(kind) });
-        Self::from_string(&value).expect("CoreBluetooth UUID constants never contain interior NUL bytes")
+        Self::from_string(&value)
+            .expect("CoreBluetooth UUID constants never contain interior NUL bytes")
     }
 
     pub fn characteristic_extended_properties() -> Self {

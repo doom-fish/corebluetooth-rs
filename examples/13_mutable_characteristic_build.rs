@@ -3,7 +3,8 @@ use corebluetooth::prelude::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let characteristic_uuid = BluetoothUuid::from_string("2A39")?;
     let descriptor_uuid = BluetoothUuid::characteristic_user_description();
-    let descriptor = MutableDescriptor::new(&descriptor_uuid, DescriptorValue::string("Control Point"))?;
+    let descriptor =
+        MutableDescriptor::new(&descriptor_uuid, DescriptorValue::string("Control Point"))?;
     let mut characteristic = MutableCharacteristic::new(
         &characteristic_uuid,
         CharacteristicProperties::WRITE,
