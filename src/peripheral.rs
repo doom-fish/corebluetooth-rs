@@ -17,14 +17,20 @@ use crate::private::{encode_string_slice, take_retained_pointer_array};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[repr(i32)]
+/// Mirrors `CBPeripheralState`.
 pub enum PeripheralState {
+    /// Corresponds to the matching `CBPeripheralState` case.
     Disconnected = 0,
+    /// Corresponds to the matching `CBPeripheralState` case.
     Connecting = 1,
+    /// Corresponds to the matching `CBPeripheralState` case.
     Connected = 2,
+    /// Corresponds to the matching `CBPeripheralState` case.
     Disconnecting = 3,
 }
 
 impl PeripheralState {
+    /// Converts a raw `CBPeripheralState` value into `PeripheralState`.
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::Connecting,
@@ -59,17 +65,22 @@ mod private {
     pub trait Sealed {}
 }
 
+/// Delegate callbacks corresponding to `CBPeripheralDelegate`.
 pub trait PeripheralDelegate: Send + private::Sealed {
+    /// Handles `peripheralDidUpdateName:`.
     fn did_update_name(&mut self) {}
 
+    /// Handles `peripheral:didModifyServices:`.
     fn did_modify_services(&mut self, invalidated_services: Vec<Service>) {
         let _ = invalidated_services;
     }
 
+    /// Handles `peripheral:didDiscoverServices:`.
     fn did_discover_services(&mut self, services: Vec<Service>, error: Option<BluetoothErrorInfo>) {
         let _ = (services, error);
     }
 
+    /// Handles `peripheral:didDiscoverIncludedServicesForService:error:`.
     fn did_discover_included_services_for_service(
         &mut self,
         service: Service,
@@ -78,6 +89,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (service, error);
     }
 
+    /// Handles `peripheral:didDiscoverCharacteristicsForService:error:`.
     fn did_discover_characteristics_for_service(
         &mut self,
         service: Service,
@@ -87,6 +99,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (service, characteristics, error);
     }
 
+    /// Handles `peripheral:didUpdateValueForCharacteristic:error:`.
     fn did_update_value_for_characteristic(
         &mut self,
         characteristic: Characteristic,
@@ -95,6 +108,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (characteristic, error);
     }
 
+    /// Handles `peripheral:didWriteValueForCharacteristic:error:`.
     fn did_write_value_for_characteristic(
         &mut self,
         characteristic: Characteristic,
@@ -103,6 +117,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (characteristic, error);
     }
 
+    /// Handles `peripheral:didUpdateNotificationStateForCharacteristic:error:`.
     fn did_update_notification_state_for_characteristic(
         &mut self,
         characteristic: Characteristic,
@@ -111,6 +126,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (characteristic, error);
     }
 
+    /// Handles `peripheral:didDiscoverDescriptorsForCharacteristic:error:`.
     fn did_discover_descriptors_for_characteristic(
         &mut self,
         characteristic: Characteristic,
@@ -119,6 +135,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (characteristic, error);
     }
 
+    /// Handles `peripheral:didUpdateValueForDescriptor:error:`.
     fn did_update_value_for_descriptor(
         &mut self,
         descriptor: Descriptor,
@@ -127,6 +144,7 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (descriptor, error);
     }
 
+    /// Handles `peripheral:didWriteValueForDescriptor:error:`.
     fn did_write_value_for_descriptor(
         &mut self,
         descriptor: Descriptor,
@@ -135,12 +153,15 @@ pub trait PeripheralDelegate: Send + private::Sealed {
         let _ = (descriptor, error);
     }
 
+    /// Handles `peripheralIsReadyToSendWriteWithoutResponse:`.
     fn is_ready_to_send_write_without_response(&mut self) {}
 
+    /// Handles `peripheral:didReadRSSI:error:`.
     fn did_read_rssi(&mut self, rssi: i32, error: Option<BluetoothErrorInfo>) {
         let _ = (rssi, error);
     }
 
+    /// Handles `peripheral:didOpenL2CAPChannel:error:`.
     fn did_open_l2cap_channel(
         &mut self,
         channel: Option<L2capChannel>,
@@ -168,6 +189,7 @@ type L2capHandler =
 
 #[allow(clippy::type_complexity)]
 #[must_use]
+/// Closure-based adapter for `CBPeripheralDelegate`.
 pub struct PeripheralCallbacks {
     name: Option<NameHandler>,
     modify_services: Option<ModifyServicesHandler>,
@@ -186,6 +208,7 @@ pub struct PeripheralCallbacks {
 }
 
 impl PeripheralCallbacks {
+    /// Creates an empty closure-based adapter for `CBPeripheralDelegate`.
     pub fn new() -> Self {
         Self {
             name: None,
@@ -205,11 +228,13 @@ impl PeripheralCallbacks {
         }
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_name_update(mut self, callback: impl FnMut() + Send + 'static) -> Self {
         self.name = Some(Box::new(callback));
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_modify_services(
         mut self,
         callback: impl FnMut(Vec<Service>) + Send + 'static,
@@ -218,6 +243,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_services(
         mut self,
         callback: impl FnMut(Vec<Service>, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -226,6 +252,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_included_services(
         mut self,
         callback: impl FnMut(Service, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -234,6 +261,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_characteristics(
         mut self,
         callback: impl FnMut(Service, Vec<Characteristic>, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -242,6 +270,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_value_update(
         mut self,
         callback: impl FnMut(Characteristic, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -250,6 +279,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_write(
         mut self,
         callback: impl FnMut(Characteristic, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -258,6 +288,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_notification_state(
         mut self,
         callback: impl FnMut(Characteristic, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -266,6 +297,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_discover_descriptors(
         mut self,
         callback: impl FnMut(Characteristic, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -274,6 +306,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_descriptor_value_update(
         mut self,
         callback: impl FnMut(Descriptor, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -282,6 +315,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_descriptor_write(
         mut self,
         callback: impl FnMut(Descriptor, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -290,11 +324,13 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_ready_to_send(mut self, callback: impl FnMut() + Send + 'static) -> Self {
         self.ready = Some(Box::new(callback));
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_rssi(
         mut self,
         callback: impl FnMut(i32, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -303,6 +339,7 @@ impl PeripheralCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBPeripheralDelegate`.
     pub fn on_l2cap_channel(
         mut self,
         callback: impl FnMut(Option<L2capChannel>, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -446,6 +483,7 @@ struct CallbackState {
     delegate: Mutex<Box<dyn PeripheralDelegate>>,
 }
 
+/// Wraps `CBPeripheral`.
 pub struct Peripheral {
     pub(crate) raw: *mut c_void,
     callback_state: Option<Box<CallbackState>>,
@@ -599,6 +637,7 @@ impl Peripheral {
         self.raw
     }
 
+    /// Registers a delegate implementing `PeripheralDelegate` for this `CBPeripheral`.
     pub fn set_delegate<D>(&mut self, delegate: D) -> Result<(), CoreBluetoothError>
     where
         D: PeripheralDelegate + 'static,
@@ -629,6 +668,7 @@ impl Peripheral {
         }
     }
 
+    /// Registers `PeripheralCallbacks` for this `CBPeripheral`.
     pub fn set_callbacks(
         &mut self,
         callbacks: PeripheralCallbacks,
@@ -636,25 +676,30 @@ impl Peripheral {
         self.set_delegate(callbacks)
     }
 
+    /// Clears the current `CBPeripheralDelegate` bridge.
     pub fn clear_delegate(&mut self) {
         unsafe { ffi::cb_peripheral_clear_delegate(self.raw) };
         self.callback_state = None;
     }
 
+    /// Returns the name exposed by `CBPeripheral`.
     pub fn name(&self) -> String {
         let ptr = unsafe { ffi::cb_peripheral_name(self.raw) };
         take_owned_c_string(ptr)
     }
 
+    /// Returns the identifier exposed by `CBPeripheral`.
     pub fn identifier(&self) -> String {
         let ptr = unsafe { ffi::cb_peripheral_identifier(self.raw) };
         take_owned_c_string(ptr)
     }
 
+    /// Returns the current `CBPeripheralState`.
     pub fn state(&self) -> PeripheralState {
         PeripheralState::from_raw(unsafe { ffi::cb_peripheral_state(self.raw) })
     }
 
+    /// Returns the services exposed by `CBPeripheral`.
     pub fn services(&self) -> Vec<Service> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
@@ -665,10 +710,12 @@ impl Peripheral {
             .collect()
     }
 
+    /// Returns `CBPeripheral.canSendWriteWithoutResponse`.
     pub fn can_send_write_without_response(&self) -> bool {
         unsafe { ffi::cb_peripheral_can_send_write_without_response(self.raw) }
     }
 
+    /// Invokes `discoverServices:`.
     pub fn discover_services(
         &self,
         service_uuids: Option<&[&str]>,
@@ -694,6 +741,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `discoverIncludedServices:forService:`.
     pub fn discover_included_services(
         &self,
         service: &Service,
@@ -721,6 +769,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `readRSSI`.
     pub fn read_rssi(&self) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe { ffi::cb_peripheral_read_rssi(self.raw, &mut error) };
@@ -731,6 +780,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `discoverCharacteristics:forService:`.
     pub fn discover_characteristics(
         &self,
         service: &Service,
@@ -758,6 +808,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `readValueForCharacteristic:`.
     pub fn read_value_for_characteristic(
         &self,
         characteristic: &Characteristic,
@@ -777,10 +828,12 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `maximumWriteValueLengthForType:`.
     pub fn maximum_write_value_length(&self, write_type: CharacteristicWriteType) -> usize {
         unsafe { ffi::cb_peripheral_maximum_write_value_length(self.raw, write_type as i32) }
     }
 
+    /// Invokes `writeValue:forCharacteristic:type:`.
     pub fn write_value_for_characteristic(
         &self,
         characteristic: &Characteristic,
@@ -805,6 +858,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `setNotifyValue:forCharacteristic:`.
     pub fn set_notify_value(
         &self,
         characteristic: &Characteristic,
@@ -821,6 +875,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `discoverDescriptorsForCharacteristic:`.
     pub fn discover_descriptors(
         &self,
         characteristic: &Characteristic,
@@ -836,6 +891,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `readValueForDescriptor:`.
     pub fn read_value_for_descriptor(
         &self,
         descriptor: &Descriptor,
@@ -851,6 +907,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `writeValue:forDescriptor:`.
     pub fn write_value_for_descriptor(
         &self,
         descriptor: &Descriptor,
@@ -873,6 +930,7 @@ impl Peripheral {
         }
     }
 
+    /// Invokes `openL2CAPChannel:`.
     pub fn open_l2cap_channel(&self, psm: u16) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe { ffi::cb_peripheral_open_l2cap_channel(self.raw, psm, &mut error) };

@@ -10,6 +10,7 @@ use crate::uuid::BluetoothUuid;
 
 #[derive(Debug, Clone, Default)]
 #[must_use]
+/// Advertisement payload decoded from, or encoded for, `CoreBluetooth` advertisement dictionaries such as `CBAdvertisementDataLocalNameKey`.
 pub struct AdvertisementData {
     raw: Value,
     local_name: Option<String>,
@@ -29,6 +30,7 @@ pub(crate) struct AdvertisementPayload {
 }
 
 impl AdvertisementData {
+    /// Creates an empty advertisement dictionary matching the `CBAdvertisementData` payload shape.
     pub fn new() -> Self {
         Self {
             raw: Value::Object(serde_json::Map::default()),
@@ -36,16 +38,19 @@ impl AdvertisementData {
         }
     }
 
+    /// Sets the `CBAdvertisementDataLocalNameKey` value.
     pub fn with_local_name(mut self, local_name: impl Into<String>) -> Self {
         self.local_name = Some(local_name.into());
         self
     }
 
+    /// Adds a service UUID to the `CBAdvertisementDataServiceUUIDsKey` list.
     pub fn with_service_uuid(mut self, uuid: BluetoothUuid) -> Self {
         self.service_uuids.push(uuid);
         self
     }
 
+    /// Decodes advertisement data from the JSON dictionary emitted by the `CoreBluetooth` bridge.
     pub fn from_json_value(raw: Value) -> Result<Self, CoreBluetoothError> {
         let object = raw.as_object().cloned().unwrap_or_default();
         let local_name = object
@@ -82,38 +87,47 @@ impl AdvertisementData {
         })
     }
 
+    /// Returns the `CBAdvertisementDataLocalNameKey` value.
     pub fn local_name(&self) -> Option<&str> {
         self.local_name.as_deref()
     }
 
+    /// Returns the `CBAdvertisementDataTxPowerLevelKey` value.
     pub fn tx_power_level(&self) -> Option<i32> {
         self.tx_power_level
     }
 
+    /// Returns the `CBAdvertisementDataServiceUUIDsKey` values.
     pub fn service_uuids(&self) -> &[BluetoothUuid] {
         &self.service_uuids
     }
 
+    /// Returns the `CBAdvertisementDataServiceDataKey` payload.
     pub fn service_data(&self) -> &HashMap<String, Vec<u8>> {
         &self.service_data
     }
 
+    /// Returns the `CBAdvertisementDataManufacturerDataKey` payload.
     pub fn manufacturer_data(&self) -> Option<&[u8]> {
         self.manufacturer_data.as_deref()
     }
 
+    /// Returns the `CBAdvertisementDataOverflowServiceUUIDsKey` values.
     pub fn overflow_service_uuids(&self) -> &[BluetoothUuid] {
         &self.overflow_service_uuids
     }
 
+    /// Returns the `CBAdvertisementDataIsConnectable` flag.
     pub fn is_connectable(&self) -> Option<bool> {
         self.is_connectable
     }
 
+    /// Returns the `CBAdvertisementDataSolicitedServiceUUIDsKey` values.
     pub fn solicited_service_uuids(&self) -> &[BluetoothUuid] {
         &self.solicited_service_uuids
     }
 
+    /// Returns the raw JSON dictionary produced by the `CoreBluetooth` bridge.
     pub fn raw(&self) -> &Value {
         &self.raw
     }

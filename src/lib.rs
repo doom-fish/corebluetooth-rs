@@ -16,24 +16,38 @@
     clippy::new_without_default
 )]
 
+/// Advertisement-data builders and parsers corresponding to `CBAdvertisementData` keys.
 pub mod advertisement;
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_api;
+/// ATT request and error wrappers corresponding to `CBATTRequest` and `CBATTError`.
 pub mod att;
+/// Compatibility re-exports for central-role `CoreBluetooth` types.
 pub mod central;
+/// `CBCentralManager` wrappers and related central-role types.
 pub mod central_manager;
+/// `CBCharacteristic` wrappers, properties, permissions, and write types.
 pub mod characteristic;
+/// `CBDescriptor` and `CBMutableDescriptor` wrappers.
 pub mod descriptor;
+/// Error types corresponding to `CBError` values and bridge failures.
 pub mod error;
 pub mod ffi;
+/// `CBL2CAPChannel` wrappers and stream helpers.
 pub mod l2cap_channel;
+/// `CBMutableCharacteristic` wrappers for local GATT databases.
 pub mod mutable_characteristic;
+/// `CBMutableService` wrappers for local GATT databases.
 pub mod mutable_service;
+/// `CBPeripheral` wrappers and delegate helpers.
 pub mod peripheral;
+/// `CBPeripheralManager` wrappers and related peripheral-role types.
 pub mod peripheral_manager;
 mod private;
+/// `CBService` wrappers.
 pub mod service;
+/// `CBUUID` wrappers and well-known descriptor UUID helpers.
 pub mod uuid;
 
 pub use advertisement::AdvertisementData;

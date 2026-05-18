@@ -13,16 +13,24 @@ use crate::uuid::BluetoothUuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[repr(i32)]
+/// Mirrors `CBCentralManagerState`.
 pub enum CentralManagerState {
+    /// Corresponds to the matching `CBCentralManagerState` case.
     Unknown = 0,
+    /// Corresponds to the matching `CBCentralManagerState` case.
     Resetting = 1,
+    /// Corresponds to the matching `CBCentralManagerState` case.
     Unsupported = 2,
+    /// Corresponds to the matching `CBCentralManagerState` case.
     Unauthorized = 3,
+    /// Corresponds to the matching `CBCentralManagerState` case.
     PoweredOff = 4,
+    /// Corresponds to the matching `CBCentralManagerState` case.
     PoweredOn = 5,
 }
 
 impl CentralManagerState {
+    /// Converts a raw `CBCentralManagerState` value into `CentralManagerState`.
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::Resetting,
@@ -37,14 +45,20 @@ impl CentralManagerState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[repr(i32)]
+/// Mirrors `CBManagerAuthorization`.
 pub enum ManagerAuthorization {
+    /// Corresponds to the matching `CBManagerAuthorization` case.
     NotDetermined = 0,
+    /// Corresponds to the matching `CBManagerAuthorization` case.
     Restricted = 1,
+    /// Corresponds to the matching `CBManagerAuthorization` case.
     Denied = 2,
+    /// Corresponds to the matching `CBManagerAuthorization` case.
     AllowedAlways = 3,
 }
 
 impl ManagerAuthorization {
+    /// Converts a raw `CBManagerAuthorization` value into `ManagerAuthorization`.
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::Restricted,
@@ -54,6 +68,7 @@ impl ManagerAuthorization {
         }
     }
 
+    /// Returns whether `CoreBluetooth` currently reports `AllowedAlways` authorization.
     pub const fn is_authorized(self) -> bool {
         matches!(self, Self::AllowedAlways)
     }
@@ -61,27 +76,35 @@ impl ManagerAuthorization {
 
 #[derive(Debug, Clone, Default)]
 #[must_use]
+/// Construction options corresponding to `CBCentralManagerOptionShowPowerAlertKey` and related manager options.
 pub struct CentralManagerOptions {
+    /// Dispatch queue label passed to `CoreBluetooth` when constructing the manager.
     pub queue_label: Option<String>,
+    /// Value forwarded to the `CoreBluetooth` show-power-alert option key.
     pub show_power_alert: Option<bool>,
+    /// Identifier forwarded to the `CoreBluetooth` state-restoration option key.
     pub restore_identifier: Option<String>,
 }
 
 impl CentralManagerOptions {
+    /// Creates empty `CBCentralManager` construction options.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the dispatch queue label used when constructing `CBCentralManager`.
     pub fn with_queue_label(mut self, queue_label: impl Into<String>) -> Self {
         self.queue_label = Some(queue_label.into());
         self
     }
 
+    /// Sets the `CoreBluetooth` show-power-alert option for `CBCentralManager`.
     pub fn with_show_power_alert(mut self, show_power_alert: bool) -> Self {
         self.show_power_alert = Some(show_power_alert);
         self
     }
 
+    /// Sets the state-restoration identifier for `CBCentralManager`.
     pub fn with_restore_identifier(mut self, restore_identifier: impl Into<String>) -> Self {
         self.restore_identifier = Some(restore_identifier.into());
         self
@@ -90,39 +113,51 @@ impl CentralManagerOptions {
 
 #[derive(Debug, Clone, Default)]
 #[must_use]
+/// Connection options corresponding to `connectPeripheral:options:`.
 pub struct ConnectOptions {
+    /// Value forwarded to `CBConnectPeripheralOptionNotifyOnConnectionKey`.
     pub notify_on_connection: Option<bool>,
+    /// Value forwarded to `CBConnectPeripheralOptionNotifyOnDisconnectionKey`.
     pub notify_on_disconnection: Option<bool>,
+    /// Value forwarded to `CBConnectPeripheralOptionNotifyOnNotificationKey`.
     pub notify_on_notification: Option<bool>,
+    /// Value forwarded to `CBConnectPeripheralOptionStartDelayKey`.
     pub start_delay_seconds: Option<f64>,
+    /// Value forwarded to `CBConnectPeripheralOptionEnableAutoReconnect`.
     pub enable_auto_reconnect: Option<bool>,
 }
 
 impl ConnectOptions {
+    /// Creates empty connection options for `connectPeripheral:options:`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets `CBConnectPeripheralOptionNotifyOnConnectionKey`.
     pub fn with_notify_on_connection(mut self, value: bool) -> Self {
         self.notify_on_connection = Some(value);
         self
     }
 
+    /// Sets `CBConnectPeripheralOptionNotifyOnDisconnectionKey`.
     pub fn with_notify_on_disconnection(mut self, value: bool) -> Self {
         self.notify_on_disconnection = Some(value);
         self
     }
 
+    /// Sets `CBConnectPeripheralOptionNotifyOnNotificationKey`.
     pub fn with_notify_on_notification(mut self, value: bool) -> Self {
         self.notify_on_notification = Some(value);
         self
     }
 
+    /// Sets `CBConnectPeripheralOptionStartDelayKey`.
     pub fn with_start_delay_seconds(mut self, value: f64) -> Self {
         self.start_delay_seconds = Some(value);
         self
     }
 
+    /// Sets `CBConnectPeripheralOptionEnableAutoReconnect`.
     pub fn with_enable_auto_reconnect(mut self, value: bool) -> Self {
         self.enable_auto_reconnect = Some(value);
         self
@@ -131,12 +166,16 @@ impl ConnectOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
+/// Scan options corresponding to `scanForPeripheralsWithServices:options:`.
 pub struct ScanOptions {
+    /// Whether duplicate discoveries should be reported while scanning.
     pub allow_duplicates: bool,
+    /// Solicited service UUIDs forwarded to the `CoreBluetooth` scan options dictionary.
     pub solicited_service_uuids: Vec<BluetoothUuid>,
 }
 
 impl ScanOptions {
+    /// Creates empty scan options for `scanForPeripheralsWithServices:options:`.
     pub fn new() -> Self {
         Self {
             allow_duplicates: false,
@@ -144,11 +183,13 @@ impl ScanOptions {
         }
     }
 
+    /// Sets `CBCentralManagerScanOptionAllowDuplicatesKey`.
     pub const fn with_allow_duplicates(mut self, allow_duplicates: bool) -> Self {
         self.allow_duplicates = allow_duplicates;
         self
     }
 
+    /// Adds a UUID to `CBCentralManagerScanOptionSolicitedServiceUUIDsKey`.
     pub fn with_solicited_service_uuid(mut self, uuid: BluetoothUuid) -> Self {
         self.solicited_service_uuids.push(uuid);
         self
@@ -161,9 +202,13 @@ impl Default for ScanOptions {
     }
 }
 
+/// State restored by `centralManager:willRestoreState:`.
 pub struct CentralManagerRestoredState {
+    /// Peripherals restored under `CBCentralManagerRestoredStatePeripheralsKey`.
     pub peripherals: Vec<Peripheral>,
+    /// Service UUIDs restored under `CBCentralManagerRestoredStateScanServicesKey`.
     pub scan_service_uuids: Vec<BluetoothUuid>,
+    /// Scan options restored under `CBCentralManagerRestoredStateScanOptionsKey`.
     pub scan_options: Option<ScanOptions>,
 }
 
@@ -210,7 +255,9 @@ mod private {
     pub trait Sealed {}
 }
 
+/// Delegate callbacks corresponding to `CBCentralManagerDelegate`.
 pub trait CentralManagerDelegate: Send + private::Sealed {
+    /// Handles `centralManagerDidUpdateState:`.
     fn did_update_state(
         &mut self,
         state: CentralManagerState,
@@ -219,10 +266,12 @@ pub trait CentralManagerDelegate: Send + private::Sealed {
         let _ = (state, authorization);
     }
 
+    /// Handles `centralManager:willRestoreState:`.
     fn will_restore_state(&mut self, restored_state: CentralManagerRestoredState) {
         let _ = restored_state;
     }
 
+    /// Handles `centralManager:didDiscoverPeripheral:advertisementData:RSSI:`.
     fn did_discover_peripheral(
         &mut self,
         peripheral: Peripheral,
@@ -232,10 +281,12 @@ pub trait CentralManagerDelegate: Send + private::Sealed {
         let _ = (peripheral, rssi, advertisement_data);
     }
 
+    /// Handles `centralManager:didConnectPeripheral:`.
     fn did_connect_peripheral(&mut self, peripheral: Peripheral) {
         let _ = peripheral;
     }
 
+    /// Handles `centralManager:didFailToConnectPeripheral:error:`.
     fn did_fail_to_connect_peripheral(
         &mut self,
         peripheral: Peripheral,
@@ -244,6 +295,7 @@ pub trait CentralManagerDelegate: Send + private::Sealed {
         let _ = (peripheral, error);
     }
 
+    /// Handles `centralManager:didDisconnectPeripheral:error:`.
     fn did_disconnect_peripheral(
         &mut self,
         peripheral: Peripheral,
@@ -252,6 +304,7 @@ pub trait CentralManagerDelegate: Send + private::Sealed {
         let _ = (peripheral, error);
     }
 
+    /// Handles `centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`.
     fn did_disconnect_peripheral_details(
         &mut self,
         peripheral: Peripheral,
@@ -273,6 +326,7 @@ type DisconnectDetailHandler =
 
 #[allow(clippy::type_complexity)]
 #[must_use]
+/// Closure-based adapter for `CBCentralManagerDelegate`.
 pub struct CentralManagerCallbacks {
     state: Option<StateHandler>,
     restore_state: Option<RestoreHandler>,
@@ -284,6 +338,7 @@ pub struct CentralManagerCallbacks {
 }
 
 impl CentralManagerCallbacks {
+    /// Creates an empty closure-based adapter for `CBCentralManagerDelegate`.
     pub fn new() -> Self {
         Self {
             state: None,
@@ -296,6 +351,7 @@ impl CentralManagerCallbacks {
         }
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_state(
         mut self,
         callback: impl FnMut(CentralManagerState, ManagerAuthorization) + Send + 'static,
@@ -304,6 +360,7 @@ impl CentralManagerCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_restore_state(
         mut self,
         callback: impl FnMut(CentralManagerRestoredState) + Send + 'static,
@@ -312,6 +369,7 @@ impl CentralManagerCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_discover(
         mut self,
         callback: impl FnMut(Peripheral, i32, Value) + Send + 'static,
@@ -320,11 +378,13 @@ impl CentralManagerCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_connect(mut self, callback: impl FnMut(Peripheral) + Send + 'static) -> Self {
         self.connect = Some(Box::new(callback));
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_fail_to_connect(
         mut self,
         callback: impl FnMut(Peripheral, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -333,6 +393,7 @@ impl CentralManagerCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_disconnect(
         mut self,
         callback: impl FnMut(Peripheral, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -341,6 +402,7 @@ impl CentralManagerCallbacks {
         self
     }
 
+    /// Registers a closure for the corresponding callback from `CBCentralManagerDelegate`.
     pub fn on_disconnect_details(
         mut self,
         callback: impl FnMut(Peripheral, Option<f64>, bool, Option<BluetoothErrorInfo>) + Send + 'static,
@@ -428,6 +490,7 @@ struct CallbackState {
     delegate: Mutex<Box<dyn CentralManagerDelegate>>,
 }
 
+/// Wraps `CBCentralManager`.
 pub struct CentralManager {
     raw: *mut c_void,
     callback_state: Option<Box<CallbackState>>,
@@ -529,14 +592,17 @@ unsafe extern "C" fn central_manager_event_trampoline(
 }
 
 impl CentralManager {
+    /// Creates a new `CBCentralManager` wrapper using default options.
     pub fn new() -> Result<Self, CoreBluetoothError> {
         Self::with_options(CentralManagerOptions::default())
     }
 
+    /// Creates a new `CBCentralManager` wrapper with explicit options.
     pub fn with_options(options: CentralManagerOptions) -> Result<Self, CoreBluetoothError> {
         Self::new_inner(options, None)
     }
 
+    /// Creates a new `CBCentralManager` wrapper with a delegate implementing `CentralManagerDelegate`.
     pub fn with_delegate<D>(delegate: D) -> Result<Self, CoreBluetoothError>
     where
         D: CentralManagerDelegate + 'static,
@@ -544,14 +610,17 @@ impl CentralManager {
         Self::new_inner(CentralManagerOptions::default(), Some(Box::new(delegate)))
     }
 
+    /// Creates a new `CBCentralManager` wrapper backed by `CentralManagerCallbacks`.
     pub fn with_callbacks(callbacks: CentralManagerCallbacks) -> Result<Self, CoreBluetoothError> {
         Self::with_delegate(callbacks)
     }
 
+    /// Creates a new `CBCentralManager` wrapper on a named dispatch queue.
     pub fn with_queue_label(queue_label: &str) -> Result<Self, CoreBluetoothError> {
         Self::with_options(CentralManagerOptions::new().with_queue_label(queue_label))
     }
 
+    /// Creates a new `CBCentralManager` wrapper on a named queue with a delegate.
     pub fn with_queue_label_and_delegate<D>(
         queue_label: &str,
         delegate: D,
@@ -565,6 +634,7 @@ impl CentralManager {
         )
     }
 
+    /// Returns the process-wide `CoreBluetooth` authorization state for `CBCentralManager`.
     pub fn current_authorization() -> ManagerAuthorization {
         ManagerAuthorization::from_raw(unsafe { ffi::cb_manager_global_authorization() })
     }
@@ -627,18 +697,22 @@ impl CentralManager {
         self.raw
     }
 
+    /// Returns the current `CBCentralManagerState`.
     pub fn state(&self) -> CentralManagerState {
         CentralManagerState::from_raw(unsafe { ffi::cb_manager_state(self.raw) })
     }
 
+    /// Returns the current `CBManagerAuthorization` reported by `CBCentralManager`.
     pub fn authorization(&self) -> ManagerAuthorization {
         ManagerAuthorization::from_raw(unsafe { ffi::cb_manager_authorization(self.raw) })
     }
 
+    /// Returns whether `CBCentralManager.isScanning` is set.
     pub fn is_scanning(&self) -> bool {
         unsafe { ffi::cb_manager_is_scanning(self.raw) }
     }
 
+    /// Invokes `scanForPeripheralsWithServices:options:`.
     pub fn scan_for_peripherals(
         &self,
         service_uuids: Option<&[&str]>,
@@ -677,14 +751,17 @@ impl CentralManager {
         }
     }
 
+    /// Invokes `stopScan`.
     pub fn stop_scan(&self) {
         unsafe { ffi::cb_manager_stop_scan(self.raw) };
     }
 
+    /// Invokes `connectPeripheral:options:` with default options.
     pub fn connect(&self, peripheral: &Peripheral) -> Result<(), CoreBluetoothError> {
         self.connect_with_options(peripheral, &ConnectOptions::default())
     }
 
+    /// Invokes `connectPeripheral:options:` with explicit options.
     pub fn connect_with_options(
         &self,
         peripheral: &Peripheral,
@@ -708,10 +785,12 @@ impl CentralManager {
         }
     }
 
+    /// Invokes `cancelPeripheralConnection:`.
     pub fn cancel_peripheral_connection(&self, peripheral: &Peripheral) {
         unsafe { ffi::cb_manager_cancel_peripheral_connection(self.raw, peripheral.raw) };
     }
 
+    /// Invokes `retrieveConnectedPeripheralsWithServices:`.
     pub fn retrieve_connected_peripherals(
         &self,
         service_uuids: &[&str],
@@ -739,6 +818,7 @@ impl CentralManager {
         }
     }
 
+    /// Invokes `retrievePeripheralsWithIdentifiers:`.
     pub fn retrieve_peripherals_with_identifiers(
         &self,
         identifiers: &[&str],

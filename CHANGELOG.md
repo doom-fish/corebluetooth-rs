@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.4] - 2026-05-18
+
+### Changed
+
+- Added rustdoc coverage across the safe public `src/` surface so public wrappers, options, delegates, callback adapters, and async event enums now document their CoreBluetooth framework counterparts.
+
 ## [0.3.3] - 2026-05-18
 
 - Widen apple-cf version bound to `<0.10` so 0.9.x resolves.

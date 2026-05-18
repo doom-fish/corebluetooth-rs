@@ -7,6 +7,7 @@ use crate::peripheral::Peripheral;
 use crate::private::{retain_raw, retained_handle_to_raw, take_retained_pointer_array};
 use crate::uuid::BluetoothUuid;
 
+/// Wraps `CBService`.
 pub struct Service {
     pub(crate) raw: *mut c_void,
 }
@@ -20,24 +21,29 @@ impl Service {
         Self::from_retained_raw(retained_handle_to_raw(handle))
     }
 
+    /// Returns the UUID string exposed by `CBService`.
     pub fn uuid(&self) -> String {
         let ptr = unsafe { ffi::cb_service_uuid(self.raw) };
         take_owned_c_string(ptr)
     }
 
+    /// Returns the `CBUUID` exposed by `CBService`.
     pub fn uuid_object(&self) -> BluetoothUuid {
         BluetoothUuid::from_retained_raw(unsafe { ffi::cb_service_uuid_handle(self.raw) })
     }
 
+    /// Returns the owning `CBPeripheral`, if `CoreBluetooth` still exposes one.
     pub fn peripheral(&self) -> Option<Peripheral> {
         let raw = unsafe { ffi::cb_service_peripheral(self.raw) };
         (!raw.is_null()).then(|| Peripheral::from_retained_raw(raw))
     }
 
+    /// Returns whether `CBService.isPrimary` is set.
     pub fn is_primary(&self) -> bool {
         unsafe { ffi::cb_service_is_primary(self.raw) }
     }
 
+    /// Returns the included services exposed by `CBService`.
     pub fn included_services(&self) -> Vec<Self> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
@@ -48,6 +54,7 @@ impl Service {
             .collect()
     }
 
+    /// Returns the characteristics exposed by `CBService`.
     pub fn characteristics(&self) -> Vec<Characteristic> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;

@@ -61,25 +61,37 @@ struct EventEnvelope {
 pub enum CentralManagerEvent {
     /// The central manager's state changed.
     StateChanged {
+        /// The state value reported by `CoreBluetooth`.
         state: CentralManagerState,
+        /// The authorization value reported by `CoreBluetooth`.
         authorization: ManagerAuthorization,
     },
     /// A peripheral was discovered during a scan.
     PeripheralDiscovered {
+        /// The `CBPeripheral` associated with the callback.
         peripheral: Peripheral,
+        /// The RSSI value reported by `CoreBluetooth`.
         rssi: i32,
+        /// Advertisement data carried by the `CoreBluetooth` callback.
         advertisement_data: AdvertisementData,
     },
     /// A peripheral was successfully connected.
-    PeripheralConnected { peripheral: Peripheral },
+    PeripheralConnected {
+        /// The `CBPeripheral` associated with the callback.
+        peripheral: Peripheral,
+    },
     /// A connection attempt to a peripheral failed.
     PeripheralFailedToConnect {
+        /// The `CBPeripheral` associated with the callback.
         peripheral: Peripheral,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
     /// A peripheral was disconnected.
     PeripheralDisconnected {
+        /// The `CBPeripheral` associated with the callback.
         peripheral: Peripheral,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
 }
@@ -418,54 +430,92 @@ impl CentralManagerEventStream {
 /// An event emitted by a [`PeripheralEventStream`].
 #[non_exhaustive]
 pub enum PeripheralEvent {
+    /// Corresponds to `peripheralDidUpdateName:`.
     DidUpdateName,
+    /// Corresponds to `peripheral:didModifyServices:`.
     DidModifyServices {
+        /// The services invalidated by `CoreBluetooth`.
         invalidated_services: Vec<Service>,
     },
+    /// Corresponds to `peripheral:didDiscoverServices:`.
     DidDiscoverServices {
+        /// Services carried by the `CoreBluetooth` callback or restored state.
         services: Vec<Service>,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didDiscoverIncludedServicesForService:error:`.
     DidDiscoverIncludedServices {
+        /// The `CBService` associated with the callback.
         service: Service,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didDiscoverCharacteristicsForService:error:`.
     DidDiscoverCharacteristics {
+        /// The `CBService` associated with the callback.
         service: Service,
+        /// The characteristics delivered by `CoreBluetooth`.
         characteristics: Vec<Characteristic>,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didUpdateValueForCharacteristic:error:`.
     DidUpdateCharacteristicValue {
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didWriteValueForCharacteristic:error:`.
     DidWriteCharacteristicValue {
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didUpdateNotificationStateForCharacteristic:error:`.
     DidUpdateNotificationState {
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didDiscoverDescriptorsForCharacteristic:error:`.
     DidDiscoverDescriptors {
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didUpdateValueForDescriptor:error:`.
     DidUpdateDescriptorValue {
+        /// The `CBDescriptor` associated with the callback.
         descriptor: Descriptor,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didWriteValueForDescriptor:error:`.
     DidWriteDescriptorValue {
+        /// The `CBDescriptor` associated with the callback.
         descriptor: Descriptor,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheralIsReadyToSendWriteWithoutResponse:`.
     IsReadyToSendWriteWithoutResponse,
+    /// Corresponds to `peripheral:didReadRSSI:error:`.
     DidReadRssi {
+        /// The RSSI value reported by `CoreBluetooth`.
         rssi: i32,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheral:didOpenL2CAPChannel:error:`.
     DidOpenL2capChannel {
+        /// The `CBL2CAPChannel` associated with the callback, if one was opened.
         channel: Option<L2capChannel>,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
 }
@@ -662,42 +712,70 @@ impl PeripheralEventStream {
 /// An event emitted by a [`PeripheralManagerEventStream`].
 #[non_exhaustive]
 pub enum PeripheralManagerEvent {
+    /// Corresponds to `peripheralManagerDidUpdateState:`.
     StateChanged {
+        /// The state value reported by `CoreBluetooth`.
         state: PeripheralManagerState,
+        /// The authorization value reported by `CoreBluetooth`.
         authorization: ManagerAuthorization,
     },
+    /// Corresponds to `peripheralManagerDidStartAdvertising:error:`.
     DidStartAdvertising {
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheralManager:didAddService:error:`.
     DidAddService {
+        /// The `CBService` associated with the callback.
         service: Service,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheralManager:central:didSubscribeToCharacteristic:`.
     DidSubscribeCentral {
+        /// The `CBCentral` associated with the callback.
         central: Central,
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
     },
+    /// Corresponds to `peripheralManager:central:didUnsubscribeFromCharacteristic:`.
     DidUnsubscribeCentral {
+        /// The `CBCentral` associated with the callback.
         central: Central,
+        /// The `CBCharacteristic` associated with the callback.
         characteristic: Characteristic,
     },
+    /// Corresponds to `peripheralManagerIsReadyToUpdateSubscribers:`.
     IsReadyToUpdateSubscribers,
+    /// Corresponds to `peripheralManager:didReceiveReadRequest:`.
     DidReceiveReadRequest {
+        /// The `CBATTRequest` associated with the callback.
         request: AttRequest,
     },
+    /// Corresponds to `peripheralManager:didReceiveWriteRequests:`.
     DidReceiveWriteRequests {
+        /// The `CBATTRequest` values carried by the callback.
         requests: Vec<AttRequest>,
     },
+    /// Corresponds to `peripheralManager:didPublishL2CAPChannel:error:`.
     DidPublishL2capChannel {
+        /// The L2CAP PSM reported by `CoreBluetooth`.
         psm: u16,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheralManager:didUnpublishL2CAPChannel:error:`.
     DidUnpublishL2capChannel {
+        /// The L2CAP PSM reported by `CoreBluetooth`.
         psm: u16,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
+    /// Corresponds to `peripheralManager:didOpenL2CAPChannel:error:`.
     DidOpenL2capChannel {
+        /// The `CBL2CAPChannel` associated with the callback, if one was opened.
         channel: Option<L2capChannel>,
+        /// The `CoreBluetooth` error metadata, if any.
         error: Option<BluetoothErrorInfo>,
     },
 }

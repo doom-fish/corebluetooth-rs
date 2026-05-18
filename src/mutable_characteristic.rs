@@ -8,6 +8,7 @@ use crate::peripheral_manager::Central;
 use crate::private::{retain_raw, take_retained_pointer_array};
 use crate::uuid::BluetoothUuid;
 
+/// Wraps `CBMutableCharacteristic`.
 pub struct MutableCharacteristic {
     pub(crate) raw: *mut c_void,
 }
@@ -17,6 +18,7 @@ impl MutableCharacteristic {
         Self { raw }
     }
 
+    /// Creates a new `CBMutableCharacteristic` wrapper.
     pub fn new(
         uuid: &BluetoothUuid,
         properties: CharacteristicProperties,
@@ -43,40 +45,49 @@ impl MutableCharacteristic {
         }
     }
 
+    /// Returns this mutable characteristic as an immutable `CBCharacteristic` view.
     pub fn as_characteristic(&self) -> Characteristic {
         Characteristic::from_retained_raw(retain_raw(self.raw))
     }
 
+    /// Returns the UUID string exposed by `CBMutableCharacteristic`.
     pub fn uuid(&self) -> String {
         self.as_characteristic().uuid()
     }
 
+    /// Returns the `CBUUID` exposed by `CBMutableCharacteristic`.
     pub fn uuid_object(&self) -> BluetoothUuid {
         self.as_characteristic().uuid_object()
     }
 
+    /// Returns the `CBCharacteristicProperties` exposed by `CBMutableCharacteristic`.
     pub fn properties(&self) -> CharacteristicProperties {
         self.as_characteristic().properties()
     }
 
+    /// Sets the `CBCharacteristicProperties` exposed by `CBMutableCharacteristic`.
     pub fn set_properties(&mut self, properties: CharacteristicProperties) {
         unsafe { ffi::cb_mutable_characteristic_set_properties(self.raw, properties.bits()) };
     }
 
+    /// Returns the `CBAttributePermissions` exposed by `CBMutableCharacteristic`.
     pub fn permissions(&self) -> AttributePermissions {
         AttributePermissions::from_bits(unsafe {
             ffi::cb_mutable_characteristic_permissions(self.raw)
         })
     }
 
+    /// Sets the `CBAttributePermissions` exposed by `CBMutableCharacteristic`.
     pub fn set_permissions(&mut self, permissions: AttributePermissions) {
         unsafe { ffi::cb_mutable_characteristic_set_permissions(self.raw, permissions.bits()) };
     }
 
+    /// Returns the value exposed by `CBMutableCharacteristic`.
     pub fn value(&self) -> Result<Option<Vec<u8>>, CoreBluetoothError> {
         self.as_characteristic().value()
     }
 
+    /// Sets the value exposed by `CBMutableCharacteristic`.
     pub fn set_value(&mut self, value: Option<&[u8]>) {
         unsafe {
             ffi::cb_mutable_characteristic_set_value(
@@ -87,10 +98,12 @@ impl MutableCharacteristic {
         };
     }
 
+    /// Returns the descriptors attached to `CBMutableCharacteristic`.
     pub fn descriptors(&self) -> Vec<Descriptor> {
         self.as_characteristic().descriptors()
     }
 
+    /// Sets mutable descriptor children on `CBMutableCharacteristic.descriptors`.
     pub fn set_descriptors(
         &mut self,
         descriptors: &[&MutableDescriptor],
@@ -115,6 +128,7 @@ impl MutableCharacteristic {
         }
     }
 
+    /// Sets immutable descriptor views on `CBMutableCharacteristic.descriptors`.
     pub fn set_descriptor_views(
         &mut self,
         descriptors: &[&Descriptor],
@@ -139,6 +153,7 @@ impl MutableCharacteristic {
         }
     }
 
+    /// Returns the subscribed centrals exposed by `CBMutableCharacteristic.subscribedCentrals`.
     pub fn subscribed_centrals(&self) -> Vec<Central> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;

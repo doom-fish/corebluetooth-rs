@@ -19,6 +19,7 @@ const UUID_CONSTANT_OBSERVATION_SCHEDULE: i32 = 7;
 const UUID_CONSTANT_L2CAP_PSM: i32 = 8;
 
 #[must_use]
+/// Wraps `CBUUID`.
 pub struct BluetoothUuid {
     pub(crate) raw: *mut c_void,
 }
@@ -28,6 +29,7 @@ impl BluetoothUuid {
         Self { raw }
     }
 
+    /// Creates a `CBUUID` from its string representation.
     pub fn from_string(value: &str) -> Result<Self, CoreBluetoothError> {
         let value = to_cstring(value)?;
         Ok(Self::from_retained_raw(unsafe {
@@ -35,14 +37,17 @@ impl BluetoothUuid {
         }))
     }
 
+    /// Creates a `CBUUID` from the canonical UUID string accepted by `UUIDWithNSUUID:`.
     pub fn from_uuid_string(value: &str) -> Result<Self, CoreBluetoothError> {
         Self::from_string(value)
     }
 
+    /// Creates a `CBUUID` from raw byte data.
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self::from_retained_raw(unsafe { ffi::cb_uuid_new_from_bytes(bytes.as_ptr(), bytes.len()) })
     }
 
+    /// Creates a `CBUUID` from raw byte data.
     pub fn from_data(bytes: &[u8]) -> Self {
         Self::from_bytes(bytes)
     }
@@ -53,47 +58,58 @@ impl BluetoothUuid {
             .expect("CoreBluetooth UUID constants never contain interior NUL bytes")
     }
 
+    /// Returns the well-known extended-properties descriptor `CBUUID`.
     pub fn characteristic_extended_properties() -> Self {
         Self::constant(UUID_CONSTANT_EXTENDED_PROPERTIES)
     }
 
+    /// Returns the well-known user-description descriptor `CBUUID`.
     pub fn characteristic_user_description() -> Self {
         Self::constant(UUID_CONSTANT_USER_DESCRIPTION)
     }
 
+    /// Returns the well-known client-characteristic-configuration descriptor `CBUUID`.
     pub fn client_characteristic_configuration() -> Self {
         Self::constant(UUID_CONSTANT_CLIENT_CONFIGURATION)
     }
 
+    /// Returns the well-known server-characteristic-configuration descriptor `CBUUID`.
     pub fn server_characteristic_configuration() -> Self {
         Self::constant(UUID_CONSTANT_SERVER_CONFIGURATION)
     }
 
+    /// Returns the well-known characteristic-format descriptor `CBUUID`.
     pub fn characteristic_format() -> Self {
         Self::constant(UUID_CONSTANT_FORMAT)
     }
 
+    /// Returns the well-known characteristic-aggregate-format descriptor `CBUUID`.
     pub fn characteristic_aggregate_format() -> Self {
         Self::constant(UUID_CONSTANT_AGGREGATE_FORMAT)
     }
 
+    /// Returns the well-known valid-range descriptor `CBUUID`.
     pub fn characteristic_valid_range() -> Self {
         Self::constant(UUID_CONSTANT_VALID_RANGE)
     }
 
+    /// Returns the well-known observation-schedule descriptor `CBUUID`.
     pub fn characteristic_observation_schedule() -> Self {
         Self::constant(UUID_CONSTANT_OBSERVATION_SCHEDULE)
     }
 
+    /// Returns the well-known L2CAP PSM characteristic `CBUUID`.
     pub fn l2cap_psm_characteristic() -> Self {
         Self::constant(UUID_CONSTANT_L2CAP_PSM)
     }
 
+    /// Returns the canonical string form of this `CBUUID`.
     pub fn uuid_string(&self) -> String {
         let ptr = unsafe { ffi::cb_uuid_string(self.raw) };
         take_owned_c_string(ptr)
     }
 
+    /// Returns the raw byte data exposed by `CBUUID.data`.
     pub fn data(&self) -> Result<Vec<u8>, CoreBluetoothError> {
         let json = unsafe { ffi::cb_uuid_data_json(self.raw) };
         let value: Value = decode_json(json)?;
