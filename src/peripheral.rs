@@ -633,6 +633,7 @@ impl Peripheral {
         Self::from_retained_raw(retained_handle_to_raw(handle))
     }
 
+    #[cfg(feature = "async")]
     pub(crate) const fn as_raw(&self) -> *mut c_void {
         self.raw
     }

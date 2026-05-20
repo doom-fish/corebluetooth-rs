@@ -673,6 +673,7 @@ impl PeripheralManager {
         }
     }
 
+    #[cfg(feature = "async")]
     pub(crate) const fn as_raw(&self) -> *mut c_void {
         self.raw
     }
