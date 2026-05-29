@@ -7,12 +7,26 @@ public typealias CBPeripheralEventCallback =
 private final class CBRustPeripheralDelegate: NSObject, CBPeripheralDelegate {
     let callback: CBPeripheralEventCallback
     let userInfo: UnsafeMutableRawPointer?
+    let contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
     private var isActive = true
 
-    init(callback: @escaping CBPeripheralEventCallback, userInfo: UnsafeMutableRawPointer?) {
+    init(
+        callback: @escaping CBPeripheralEventCallback,
+        userInfo: UnsafeMutableRawPointer?,
+        contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+        contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
+    ) {
         self.callback = callback
         self.userInfo = userInfo
+        self.contextRelease = contextRelease
         super.init()
+        // Take a +1 on the Rust CallbackState for the lifetime of this object so
+        // an in-flight delegate callback can never observe a freed context.
+        contextRetain?(userInfo)
+    }
+
+    deinit {
+        contextRelease?(userInfo)
     }
 
     func deactivate() {
@@ -193,6 +207,8 @@ public func cb_peripheral_set_delegate(
     _ peripheralPtr: UnsafeMutableRawPointer?,
     _ callback: CBPeripheralEventCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+    _ contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
     guard let peripheral = cb_peripheral(peripheralPtr) else {
@@ -201,7 +217,15 @@ public func cb_peripheral_set_delegate(
     }
 
     if let callback {
-        cb_store_peripheral_delegate(CBRustPeripheralDelegate(callback: callback, userInfo: userInfo), for: peripheral)
+        cb_store_peripheral_delegate(
+            CBRustPeripheralDelegate(
+                callback: callback,
+                userInfo: userInfo,
+                contextRetain: contextRetain,
+                contextRelease: contextRelease
+            ),
+            for: peripheral
+        )
     } else {
         cb_store_peripheral_delegate(nil, for: peripheral)
     }

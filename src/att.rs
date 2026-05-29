@@ -4,7 +4,8 @@ use crate::characteristic::Characteristic;
 use crate::error::{take_owned_c_string, CoreBluetoothError};
 use crate::ffi;
 use crate::peripheral_manager::Central;
-use crate::private::{decode_optional_json, retain_raw, retained_handle_to_raw};
+use crate::private::{decode_optional_json, retained_handle_to_raw};
+use crate::retained::cb_retained;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
@@ -131,14 +132,4 @@ impl AttRequest {
     }
 }
 
-impl Clone for AttRequest {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for AttRequest {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(AttRequest);

@@ -37,12 +37,26 @@ private func cb_peripheral_manager_options(_ payload: CBPeripheralManagerOptions
 private final class CBRustPeripheralManagerDelegate: NSObject, CBPeripheralManagerDelegate {
     let callback: CBPeripheralManagerEventCallback
     let userInfo: UnsafeMutableRawPointer?
+    let contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
     private var isActive = true
 
-    init(callback: @escaping CBPeripheralManagerEventCallback, userInfo: UnsafeMutableRawPointer?) {
+    init(
+        callback: @escaping CBPeripheralManagerEventCallback,
+        userInfo: UnsafeMutableRawPointer?,
+        contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+        contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
+    ) {
         self.callback = callback
         self.userInfo = userInfo
+        self.contextRelease = contextRelease
         super.init()
+        // Take a +1 on the Rust CallbackState for the lifetime of this object so
+        // an in-flight delegate callback can never observe a freed context.
+        contextRetain?(userInfo)
+    }
+
+    deinit {
+        contextRelease?(userInfo)
     }
 
     func deactivate() {
@@ -201,6 +215,8 @@ public func cb_peripheral_manager_new(
     _ optionsJSON: UnsafePointer<CChar>?,
     _ callback: CBPeripheralManagerEventCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+    _ contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
     _ outManager: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
@@ -209,7 +225,14 @@ public func cb_peripheral_manager_new(
     do {
         let payload = try cb_decode_json_if_present(optionsJSON, as: CBPeripheralManagerOptionsPayload.self) ?? CBPeripheralManagerOptionsPayload()
         let queue = DispatchQueue(label: payload.queue_label ?? "corebluetooth-rs.peripheral")
-        let delegateBox = callback.map { CBRustPeripheralManagerDelegate(callback: $0, userInfo: userInfo) }
+        let delegateBox = callback.map {
+            CBRustPeripheralManagerDelegate(
+                callback: $0,
+                userInfo: userInfo,
+                contextRetain: contextRetain,
+                contextRelease: contextRelease
+            )
+        }
         let manager = CBPeripheralManager(delegate: nil, queue: queue, options: cb_peripheral_manager_options(payload))
         let box = CBPeripheralManagerBox(manager: manager, delegateBox: delegateBox, queue: queue)
         outManager.pointee = cb_retain(box)

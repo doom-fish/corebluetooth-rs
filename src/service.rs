@@ -4,7 +4,8 @@ use crate::characteristic::Characteristic;
 use crate::error::take_owned_c_string;
 use crate::ffi;
 use crate::peripheral::Peripheral;
-use crate::private::{retain_raw, retained_handle_to_raw, take_retained_pointer_array};
+use crate::private::{retained_handle_to_raw, take_retained_pointer_array};
+use crate::retained::cb_retained;
 use crate::uuid::BluetoothUuid;
 
 /// Wraps `CBService`.
@@ -66,14 +67,4 @@ impl Service {
     }
 }
 
-impl Clone for Service {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for Service {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(Service);

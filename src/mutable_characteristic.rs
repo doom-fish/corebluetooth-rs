@@ -6,6 +6,7 @@ use crate::error::{from_swift, CoreBluetoothError};
 use crate::ffi;
 use crate::peripheral_manager::Central;
 use crate::private::{retain_raw, take_retained_pointer_array};
+use crate::retained::cb_retained;
 use crate::uuid::BluetoothUuid;
 
 /// Wraps `CBMutableCharacteristic`.
@@ -167,14 +168,4 @@ impl MutableCharacteristic {
     }
 }
 
-impl Clone for MutableCharacteristic {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for MutableCharacteristic {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(MutableCharacteristic);

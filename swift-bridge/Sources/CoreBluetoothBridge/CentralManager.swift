@@ -92,12 +92,26 @@ private func cb_connect_options(_ payload: CBCentralManagerConnectOptionsPayload
 private final class CBRustCentralManagerDelegate: NSObject, CBCentralManagerDelegate {
     let callback: CBCentralManagerEventCallback
     let userInfo: UnsafeMutableRawPointer?
+    let contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
     private var isActive = true
 
-    init(callback: @escaping CBCentralManagerEventCallback, userInfo: UnsafeMutableRawPointer?) {
+    init(
+        callback: @escaping CBCentralManagerEventCallback,
+        userInfo: UnsafeMutableRawPointer?,
+        contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+        contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
+    ) {
         self.callback = callback
         self.userInfo = userInfo
+        self.contextRelease = contextRelease
         super.init()
+        // Take a +1 on the Rust CallbackState for the lifetime of this object so
+        // an in-flight delegate callback can never observe a freed context.
+        contextRetain?(userInfo)
+    }
+
+    deinit {
+        contextRelease?(userInfo)
     }
 
     func deactivate() {
@@ -225,6 +239,8 @@ public func cb_manager_new(
     _ optionsJSON: UnsafePointer<CChar>?,
     _ callback: CBCentralManagerEventCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ contextRetain: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
+    _ contextRelease: (@convention(c) (UnsafeMutableRawPointer?) -> Void)?,
     _ outManager: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
@@ -233,7 +249,14 @@ public func cb_manager_new(
     do {
         let payload = try cb_decode_json_if_present(optionsJSON, as: CBCentralManagerOptionsPayload.self) ?? CBCentralManagerOptionsPayload()
         let queue = DispatchQueue(label: payload.queue_label ?? "corebluetooth-rs.central")
-        let delegateBox = callback.map { CBRustCentralManagerDelegate(callback: $0, userInfo: userInfo) }
+        let delegateBox = callback.map {
+            CBRustCentralManagerDelegate(
+                callback: $0,
+                userInfo: userInfo,
+                contextRetain: contextRetain,
+                contextRelease: contextRelease
+            )
+        }
         let manager = CBCentralManager(delegate: nil, queue: queue, options: cb_central_manager_options(payload))
         let box = CBCentralManagerBox(manager: manager, delegateBox: delegateBox, queue: queue)
         outManager.pointee = cb_retain(box)

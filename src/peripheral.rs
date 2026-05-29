@@ -1,5 +1,6 @@
 use core::ffi::{c_char, c_void};
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use serde::Deserialize;
@@ -481,12 +482,65 @@ impl PeripheralDelegate for PeripheralCallbacks {
 
 struct CallbackState {
     delegate: Mutex<Box<dyn PeripheralDelegate>>,
+    ref_count: AtomicUsize,
+}
+
+impl CallbackState {
+    fn into_raw(delegate: Box<dyn PeripheralDelegate>) -> *mut Self {
+        Box::into_raw(Box::new(Self {
+            delegate: Mutex::new(delegate),
+            ref_count: AtomicUsize::new(1),
+        }))
+    }
+
+    /// Increment the reference count.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to a valid, live `CallbackState`.
+    unsafe fn retain(ptr: *mut Self) {
+        unsafe { &*ptr }.ref_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Decrement the reference count, freeing the state if it reaches zero.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be null or point to a valid `CallbackState`. After this call
+    /// the pointer must not be used if the state was freed.
+    unsafe fn release(ptr: *mut Self) {
+        if ptr.is_null() {
+            return;
+        }
+        let prev = unsafe { &*ptr }.ref_count.fetch_sub(1, Ordering::Release);
+        if prev == 1 {
+            std::sync::atomic::fence(Ordering::Acquire);
+            drop(unsafe { Box::from_raw(ptr) });
+        }
+    }
 }
 
 /// Wraps `CBPeripheral`.
 pub struct Peripheral {
     pub(crate) raw: *mut c_void,
-    callback_state: Option<Box<CallbackState>>,
+    callback_state: *mut CallbackState,
+}
+
+// C trampoline handed to Swift so the delegate bridge object can take a +1
+// reference on the `CallbackState` for the duration of its own lifetime. This
+// keeps the Rust context alive while any delegate callback can still be
+// dispatched on the Bluetooth dispatch queue.
+unsafe extern "C" fn peripheral_context_retain(user_info: *mut c_void) {
+    if !user_info.is_null() {
+        unsafe { CallbackState::retain(user_info.cast::<CallbackState>()) };
+    }
+}
+
+// C trampoline handed to Swift, invoked from the delegate's `deinit` to drop
+// the +1 reference taken in `peripheral_context_retain`.
+// `CallbackState::release` null-checks internally.
+unsafe extern "C" fn peripheral_context_release(user_info: *mut c_void) {
+    unsafe { CallbackState::release(user_info.cast::<CallbackState>()) };
 }
 
 #[allow(clippy::too_many_lines)]
@@ -625,7 +679,7 @@ impl Peripheral {
     pub(crate) fn from_retained_raw(raw: *mut c_void) -> Self {
         Self {
             raw,
-            callback_state: None,
+            callback_state: core::ptr::null_mut(),
         }
     }
 
@@ -643,28 +697,29 @@ impl Peripheral {
     where
         D: PeripheralDelegate + 'static,
     {
-        let callback_state = Box::new(CallbackState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
+        let callback_state = CallbackState::into_raw(Box::new(delegate));
+        let user_info = callback_state.cast::<c_void>();
         let mut error = core::ptr::null_mut();
-        let mut callback_state = Some(callback_state);
-        let user_info = callback_state
-            .as_deref_mut()
-            .map_or(core::ptr::null_mut(), |state| {
-                std::ptr::from_mut::<CallbackState>(state).cast::<c_void>()
-            });
         let status = unsafe {
             ffi::cb_peripheral_set_delegate(
                 self.raw,
                 Some(peripheral_event_trampoline as ffi::JsonCallback),
                 user_info,
+                Some(peripheral_context_retain as ffi::ContextRefCallback),
+                Some(peripheral_context_release as ffi::ContextRefCallback),
                 &mut error,
             )
         };
         if status == ffi::status::OK {
+            // Swift stored a new delegate (taking its own +1 on the new state
+            // and dropping its +1 on any previous one via the old delegate's
+            // `deinit`). Release this Rust-held reference to the previous state.
+            unsafe { CallbackState::release(self.callback_state) };
             self.callback_state = callback_state;
             Ok(())
         } else {
+            // Swift did not take a reference; drop our +1 to free the state.
+            unsafe { CallbackState::release(callback_state) };
             Err(from_swift(status, error))
         }
     }
@@ -679,8 +734,13 @@ impl Peripheral {
 
     /// Clears the current `CBPeripheralDelegate` bridge.
     pub fn clear_delegate(&mut self) {
+        // Swift drops the stored delegate, whose `deinit` releases the
+        // Swift-held +1 via the context-release trampoline. Afterwards we drop
+        // this Rust-held reference. The state is freed only once both sides have
+        // released, so an in-flight callback can never observe a freed context.
         unsafe { ffi::cb_peripheral_clear_delegate(self.raw) };
-        self.callback_state = None;
+        unsafe { CallbackState::release(self.callback_state) };
+        self.callback_state = core::ptr::null_mut();
     }
 
     /// Returns the name exposed by `CBPeripheral`.
@@ -951,9 +1011,10 @@ impl Clone for Peripheral {
 
 impl Drop for Peripheral {
     fn drop(&mut self) {
-        if self.callback_state.is_some() {
+        if !self.callback_state.is_null() {
             unsafe { ffi::cb_peripheral_clear_delegate(self.raw) };
         }
         unsafe { ffi::cb_object_release(self.raw) };
+        unsafe { CallbackState::release(self.callback_state) };
     }
 }

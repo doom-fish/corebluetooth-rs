@@ -5,6 +5,7 @@ use crate::error::{from_swift, CoreBluetoothError};
 use crate::ffi;
 use crate::mutable_characteristic::MutableCharacteristic;
 use crate::private::{retain_raw, retained_handle_to_raw};
+use crate::retained::cb_retained;
 use crate::service::Service;
 use crate::uuid::BluetoothUuid;
 
@@ -157,14 +158,4 @@ impl MutableService {
     }
 }
 
-impl Clone for MutableService {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for MutableService {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(MutableService);

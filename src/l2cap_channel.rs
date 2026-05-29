@@ -2,7 +2,8 @@ use core::ffi::c_void;
 
 use crate::error::take_owned_c_string;
 use crate::ffi;
-use crate::private::{retain_raw, retained_handle_to_raw};
+use crate::private::retained_handle_to_raw;
+use crate::retained::cb_retained;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
@@ -58,17 +59,7 @@ impl Peer {
     }
 }
 
-impl Clone for Peer {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for Peer {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(Peer);
 
 /// Owns the `inputStream` exposed by `CBL2CAPChannel`.
 pub struct InputStreamHandle {
@@ -101,17 +92,7 @@ impl InputStreamHandle {
     }
 }
 
-impl Clone for InputStreamHandle {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for InputStreamHandle {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(InputStreamHandle);
 
 /// Owns the `outputStream` exposed by `CBL2CAPChannel`.
 pub struct OutputStreamHandle {
@@ -144,17 +125,7 @@ impl OutputStreamHandle {
     }
 }
 
-impl Clone for OutputStreamHandle {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for OutputStreamHandle {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(OutputStreamHandle);
 
 /// Wraps `CBL2CAPChannel`.
 pub struct L2capChannel {
@@ -195,14 +166,4 @@ impl L2capChannel {
     }
 }
 
-impl Clone for L2capChannel {
-    fn clone(&self) -> Self {
-        Self::from_retained_raw(retain_raw(self.raw))
-    }
-}
-
-impl Drop for L2capChannel {
-    fn drop(&mut self) {
-        unsafe { ffi::cb_object_release(self.raw) };
-    }
-}
+cb_retained!(L2capChannel);

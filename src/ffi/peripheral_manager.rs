@@ -2,13 +2,15 @@
 
 use core::ffi::{c_char, c_void};
 
-use super::core::JsonCallback;
+use super::core::{ContextRefCallback, JsonCallback};
 
 extern "C" {
     pub fn cb_peripheral_manager_new(
         options_json: *const c_char,
         callback: Option<JsonCallback>,
         user_info: *mut c_void,
+        context_retain: Option<ContextRefCallback>,
+        context_release: Option<ContextRefCallback>,
         out_manager: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;

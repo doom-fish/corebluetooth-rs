@@ -45,6 +45,7 @@ pub mod peripheral;
 /// `CBPeripheralManager` wrappers and related peripheral-role types.
 pub mod peripheral_manager;
 mod private;
+mod retained;
 /// `CBService` wrappers.
 pub mod service;
 /// `CBUUID` wrappers and well-known descriptor UUID helpers.
