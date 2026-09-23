@@ -27,8 +27,9 @@ impl MutableService {
     pub fn new(uuid: &BluetoothUuid, is_primary: bool) -> Result<Self, CoreBluetoothError> {
         let mut raw = core::ptr::null_mut();
         let mut error = core::ptr::null_mut();
-        let status =
-            unsafe { ffi::cb_mutable_service_new(uuid.raw, is_primary, &mut raw, &mut error) };
+        let status = unsafe {
+            ffi::cb_mutable_service_new(uuid.raw, is_primary, &raw mut raw, &raw mut error)
+        };
         if status == ffi::status::OK {
             Ok(Self { raw })
         } else {
@@ -75,7 +76,7 @@ impl MutableService {
                 self.raw,
                 services.as_ptr(),
                 services.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -97,7 +98,7 @@ impl MutableService {
                 self.raw,
                 services.as_ptr(),
                 services.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -122,7 +123,7 @@ impl MutableService {
                 self.raw,
                 characteristics.as_ptr(),
                 characteristics.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -147,7 +148,7 @@ impl MutableService {
                 self.raw,
                 characteristics.as_ptr(),
                 characteristics.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {

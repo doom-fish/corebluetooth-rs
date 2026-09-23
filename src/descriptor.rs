@@ -174,7 +174,7 @@ impl MutableDescriptor {
         let mut raw = core::ptr::null_mut();
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_mutable_descriptor_new(uuid.raw, value.as_ptr(), &mut raw, &mut error)
+            ffi::cb_mutable_descriptor_new(uuid.raw, value.as_ptr(), &raw mut raw, &raw mut error)
         };
         if status == ffi::status::OK {
             Ok(Self { raw })

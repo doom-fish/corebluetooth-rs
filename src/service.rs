@@ -48,7 +48,7 @@ impl Service {
     pub fn included_services(&self) -> Vec<Self> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_service_included_services(self.raw, &mut array, &mut count) };
+        unsafe { ffi::cb_service_included_services(self.raw, &raw mut array, &raw mut count) };
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Self::from_retained_raw)
@@ -59,7 +59,7 @@ impl Service {
     pub fn characteristics(&self) -> Vec<Characteristic> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_service_characteristics(self.raw, &mut array, &mut count) };
+        unsafe { ffi::cb_service_characteristics(self.raw, &raw mut array, &raw mut count) };
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Characteristic::from_retained_raw)

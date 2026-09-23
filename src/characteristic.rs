@@ -141,7 +141,7 @@ impl Characteristic {
     pub fn descriptors(&self) -> Vec<Descriptor> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_characteristic_descriptors(self.raw, &mut array, &mut count) };
+        unsafe { ffi::cb_characteristic_descriptors(self.raw, &raw mut array, &raw mut count) };
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Descriptor::from_retained_raw)

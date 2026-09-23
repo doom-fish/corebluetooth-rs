@@ -35,8 +35,8 @@ impl MutableCharacteristic {
                 value.map_or(core::ptr::null(), <[u8]>::as_ptr),
                 value.map_or(0, <[u8]>::len),
                 permissions.bits(),
-                &mut raw,
-                &mut error,
+                &raw mut raw,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -119,7 +119,7 @@ impl MutableCharacteristic {
                 self.raw,
                 descriptors.as_ptr(),
                 descriptors.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -144,7 +144,7 @@ impl MutableCharacteristic {
                 self.raw,
                 descriptors.as_ptr(),
                 descriptors.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -159,7 +159,11 @@ impl MutableCharacteristic {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
         unsafe {
-            ffi::cb_mutable_characteristic_subscribed_centrals(self.raw, &mut array, &mut count);
+            ffi::cb_mutable_characteristic_subscribed_centrals(
+                self.raw,
+                &raw mut array,
+                &raw mut count,
+            );
         }
         take_retained_pointer_array(array, count)
             .into_iter()

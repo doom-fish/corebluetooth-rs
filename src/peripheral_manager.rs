@@ -702,8 +702,8 @@ impl PeripheralManager {
                 user_info,
                 context_retain,
                 context_release,
-                &mut raw,
-                &mut error,
+                &raw mut raw,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -750,7 +750,7 @@ impl PeripheralManager {
             ffi::cb_peripheral_manager_start_advertising(
                 self.raw,
                 advertisement_data.as_ptr(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -777,7 +777,7 @@ impl PeripheralManager {
                 self.raw,
                 latency as i32,
                 central.raw,
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -790,8 +790,9 @@ impl PeripheralManager {
     /// Invokes `addService:`.
     pub fn add_service(&self, service: &MutableService) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
-        let status =
-            unsafe { ffi::cb_peripheral_manager_add_service(self.raw, service.raw, &mut error) };
+        let status = unsafe {
+            ffi::cb_peripheral_manager_add_service(self.raw, service.raw, &raw mut error)
+        };
         if status == ffi::status::OK {
             Ok(())
         } else {
@@ -821,7 +822,7 @@ impl PeripheralManager {
                 self.raw,
                 request.raw,
                 result as i32,
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -855,8 +856,8 @@ impl PeripheralManager {
                     central_pointers.as_ptr()
                 },
                 central_pointers.len(),
-                &mut sent,
-                &mut error,
+                &raw mut sent,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -876,7 +877,7 @@ impl PeripheralManager {
             ffi::cb_peripheral_manager_publish_l2cap_channel(
                 self.raw,
                 encryption_required,
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -890,7 +891,7 @@ impl PeripheralManager {
     pub fn unpublish_l2cap_channel(&self, psm: u16) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_peripheral_manager_unpublish_l2cap_channel(self.raw, psm, &mut error)
+            ffi::cb_peripheral_manager_unpublish_l2cap_channel(self.raw, psm, &raw mut error)
         };
         if status == ffi::status::OK {
             Ok(())

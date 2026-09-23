@@ -707,7 +707,7 @@ impl Peripheral {
                 user_info,
                 Some(peripheral_context_retain as ffi::ContextRefCallback),
                 Some(peripheral_context_release as ffi::ContextRefCallback),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -764,7 +764,7 @@ impl Peripheral {
     pub fn services(&self) -> Vec<Service> {
         let mut array = core::ptr::null_mut();
         let mut count = 0;
-        unsafe { ffi::cb_peripheral_services(self.raw, &mut array, &mut count) };
+        unsafe { ffi::cb_peripheral_services(self.raw, &raw mut array, &raw mut count) };
         take_retained_pointer_array(array, count)
             .into_iter()
             .map(Service::from_retained_raw)
@@ -792,7 +792,7 @@ impl Peripheral {
                 service_uuids
                     .as_ref()
                     .map_or(core::ptr::null(), |value| value.as_ptr()),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -820,7 +820,7 @@ impl Peripheral {
                 included_service_uuids
                     .as_ref()
                     .map_or(core::ptr::null(), |value| value.as_ptr()),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -833,7 +833,7 @@ impl Peripheral {
     /// Invokes `readRSSI`.
     pub fn read_rssi(&self) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
-        let status = unsafe { ffi::cb_peripheral_read_rssi(self.raw, &mut error) };
+        let status = unsafe { ffi::cb_peripheral_read_rssi(self.raw, &raw mut error) };
         if status == ffi::status::OK {
             Ok(())
         } else {
@@ -859,7 +859,7 @@ impl Peripheral {
                 characteristic_uuids
                     .as_ref()
                     .map_or(core::ptr::null(), |value| value.as_ptr()),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -879,7 +879,7 @@ impl Peripheral {
             ffi::cb_peripheral_read_value_for_characteristic(
                 self.raw,
                 characteristic.raw,
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -909,7 +909,7 @@ impl Peripheral {
                 value.as_ptr(),
                 value.len(),
                 matches!(write_type, CharacteristicWriteType::WithResponse),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -927,7 +927,12 @@ impl Peripheral {
     ) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_peripheral_set_notify_value(self.raw, characteristic.raw, enabled, &mut error)
+            ffi::cb_peripheral_set_notify_value(
+                self.raw,
+                characteristic.raw,
+                enabled,
+                &raw mut error,
+            )
         };
         if status == ffi::status::OK {
             Ok(())
@@ -943,7 +948,7 @@ impl Peripheral {
     ) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_peripheral_discover_descriptors(self.raw, characteristic.raw, &mut error)
+            ffi::cb_peripheral_discover_descriptors(self.raw, characteristic.raw, &raw mut error)
         };
         if status == ffi::status::OK {
             Ok(())
@@ -959,7 +964,7 @@ impl Peripheral {
     ) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_peripheral_read_value_for_descriptor(self.raw, descriptor.raw, &mut error)
+            ffi::cb_peripheral_read_value_for_descriptor(self.raw, descriptor.raw, &raw mut error)
         };
         if status == ffi::status::OK {
             Ok(())
@@ -981,7 +986,7 @@ impl Peripheral {
                 descriptor.raw,
                 value.as_ptr(),
                 value.len(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -994,7 +999,8 @@ impl Peripheral {
     /// Invokes `openL2CAPChannel:`.
     pub fn open_l2cap_channel(&self, psm: u16) -> Result<(), CoreBluetoothError> {
         let mut error = core::ptr::null_mut();
-        let status = unsafe { ffi::cb_peripheral_open_l2cap_channel(self.raw, psm, &mut error) };
+        let status =
+            unsafe { ffi::cb_peripheral_open_l2cap_channel(self.raw, psm, &raw mut error) };
         if status == ffi::status::OK {
             Ok(())
         } else {

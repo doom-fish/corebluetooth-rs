@@ -731,8 +731,8 @@ impl CentralManager {
                 user_info,
                 context_retain,
                 context_release,
-                &mut raw,
-                &mut error,
+                &raw mut raw,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -795,7 +795,7 @@ impl CentralManager {
                     .as_ref()
                     .map_or(core::ptr::null(), |value| value.as_ptr()),
                 scan_options.as_ptr(),
-                &mut error,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -830,7 +830,12 @@ impl CentralManager {
         })?;
         let mut error = core::ptr::null_mut();
         let status = unsafe {
-            ffi::cb_manager_connect(self.raw, peripheral.raw, options_json.as_ptr(), &mut error)
+            ffi::cb_manager_connect(
+                self.raw,
+                peripheral.raw,
+                options_json.as_ptr(),
+                &raw mut error,
+            )
         };
         if status == ffi::status::OK {
             Ok(())
@@ -857,9 +862,9 @@ impl CentralManager {
             ffi::cb_manager_retrieve_connected_peripherals(
                 self.raw,
                 service_uuids.as_ptr(),
-                &mut array,
-                &mut count,
-                &mut error,
+                &raw mut array,
+                &raw mut count,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
@@ -885,9 +890,9 @@ impl CentralManager {
             ffi::cb_manager_retrieve_peripherals_with_identifiers(
                 self.raw,
                 identifiers.as_ptr(),
-                &mut array,
-                &mut count,
-                &mut error,
+                &raw mut array,
+                &raw mut count,
+                &raw mut error,
             )
         };
         if status == ffi::status::OK {
