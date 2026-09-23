@@ -20,6 +20,7 @@
 use core::ffi::{c_char, c_void};
 use core::fmt;
 
+use doom_fish_utils::callback_context::CallbackContext;
 use doom_fish_utils::stream::{AsyncStreamSender, BoundedAsyncStream, NextItem};
 use serde::Deserialize;
 
@@ -29,10 +30,97 @@ use crate::central_manager::{CentralManager, CentralManagerState, ManagerAuthori
 use crate::characteristic::Characteristic;
 use crate::descriptor::Descriptor;
 use crate::error::BluetoothErrorInfo;
+use crate::ffi::{ContextRefCallback, JsonCallback};
 use crate::l2cap_channel::L2capChannel;
 use crate::peripheral::Peripheral;
 use crate::peripheral_manager::{Central, PeripheralManager, PeripheralManagerState};
+use crate::private::retain_raw;
 use crate::service::Service;
+
+struct EventSink<E>(AsyncStreamSender<E>);
+
+#[allow(clippy::non_send_fields_in_send_ty)]
+unsafe impl<E> Send for EventSink<E> {}
+unsafe impl<E> Sync for EventSink<E> {}
+
+type SinkContext<E> = CallbackContext<EventSink<E>>;
+
+type SubscribeFn = unsafe extern "C" fn(
+    *mut c_void,
+    JsonCallback,
+    *mut c_void,
+    Option<ContextRefCallback>,
+    Option<ContextRefCallback>,
+) -> *mut c_void;
+type UnsubscribeFn = unsafe extern "C" fn(*mut c_void, *mut c_void);
+
+struct Subscription<E: 'static> {
+    owner: *mut c_void,
+    sink: *mut c_void,
+    context: SinkContext<E>,
+    unsubscribe: UnsubscribeFn,
+}
+
+impl<E: 'static> Subscription<E> {
+    fn new(
+        owner: *mut c_void,
+        sender: AsyncStreamSender<E>,
+        callback: JsonCallback,
+        subscribe: SubscribeFn,
+        unsubscribe: UnsubscribeFn,
+    ) -> Self {
+        let owner = retain_raw(owner);
+        let context = SinkContext::new(EventSink(sender));
+        let sink = unsafe {
+            subscribe(
+                owner,
+                callback,
+                context.as_ptr(),
+                Some(SinkContext::<E>::RETAIN),
+                Some(SinkContext::<E>::RELEASE),
+            )
+        };
+        Self {
+            owner,
+            sink,
+            context,
+            unsubscribe,
+        }
+    }
+}
+
+impl<E: 'static> Drop for Subscription<E> {
+    fn drop(&mut self) {
+        self.context.deactivate();
+        unsafe { (self.unsubscribe)(self.owner, self.sink) };
+        unsafe { crate::ffi::cb_object_release(self.owner) };
+    }
+}
+
+unsafe fn deliver_event<E: 'static>(
+    ctx: *mut c_void,
+    payload: *const c_char,
+    site: &str,
+    convert: fn(EventEnvelope) -> Option<E>,
+) {
+    if payload.is_null() {
+        return;
+    }
+    doom_fish_utils::panic_safe::catch_user_panic(site, || {
+        let json = unsafe { core::ffi::CStr::from_ptr(payload) }
+            .to_str()
+            .unwrap_or_default();
+        let Some(event) = serde_json::from_str::<EventEnvelope>(json)
+            .ok()
+            .and_then(convert)
+        else {
+            return;
+        };
+        unsafe {
+            SinkContext::<E>::with(ctx, site, |sink| sink.0.push(event));
+        }
+    });
+}
 
 #[derive(Deserialize)]
 struct EventEnvelope {
@@ -128,29 +216,14 @@ fn central_manager_event_from_envelope(env: EventEnvelope) -> Option<CentralMana
 }
 
 unsafe extern "C" fn central_manager_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    if ctx.is_null() || payload.is_null() {
-        return;
+    unsafe {
+        deliver_event(
+            ctx,
+            payload,
+            "central_manager_event_cb",
+            central_manager_event_from_envelope,
+        );
     }
-    doom_fish_utils::panic_safe::catch_user_panic("central_manager_event_cb", || {
-        // SAFETY: ctx is a valid *mut AsyncStreamSender<CentralManagerEvent> that was
-        // created via Box::into_raw in CentralManagerEventStream::subscribe and is kept
-        // alive until Drop calls Box::from_raw after unsubscribing the Swift delegate.
-        // The delegate is cleared before Box::from_raw, so this borrow is valid on the
-        // CoreBluetooth dispatch queue.  Note: if the manager was created with a custom
-        // queue that differs from the thread calling drop(), an in-flight dispatch may
-        // race with Box::from_raw — that window is documented and accepted.
-        let sender = unsafe { &*ctx.cast::<AsyncStreamSender<CentralManagerEvent>>() };
-        // SAFETY: payload is a non-null, NUL-terminated C string owned by the Swift
-        // bridge for the duration of this call.
-        let json = unsafe { core::ffi::CStr::from_ptr(payload) }
-            .to_str()
-            .unwrap_or_default();
-        if let Ok(env) = serde_json::from_str::<EventEnvelope>(json) {
-            if let Some(event) = central_manager_event_from_envelope(env) {
-                sender.push(event);
-            }
-        }
-    });
 }
 
 struct OpaqueDebug(&'static str);
@@ -335,41 +408,6 @@ impl fmt::Debug for PeripheralManagerEvent {
     }
 }
 
-struct SubscriptionHandleCm {
-    manager_ptr: *mut c_void,
-    swift_handle: *mut c_void,
-    sender_ptr: *mut AsyncStreamSender<CentralManagerEvent>,
-}
-
-impl Drop for SubscriptionHandleCm {
-    fn drop(&mut self) {
-        if !self.swift_handle.is_null() {
-            // SAFETY: swift_handle is the retained opaque reference returned by
-            // cb_central_manager_stream_subscribe.  This is the unique place we
-            // release it; after this call the Swift bridge is no longer the
-            // CBCentralManager delegate and will not fire the event callback again
-            // (on the same dispatch queue as the manager).
-            unsafe {
-                crate::ffi::cb_central_manager_stream_unsubscribe(
-                    self.manager_ptr,
-                    self.swift_handle,
-                );
-            }
-        }
-        if !self.sender_ptr.is_null() {
-            // SAFETY: sender_ptr was created via Box::into_raw in subscribe and is
-            // not freed anywhere else.  Unsubscribe was called above so the Swift
-            // bridge no longer holds this pointer as its ctx.
-            unsafe {
-                let _ = Box::from_raw(self.sender_ptr);
-            }
-        }
-    }
-}
-
-unsafe impl Send for SubscriptionHandleCm {}
-unsafe impl Sync for SubscriptionHandleCm {}
-
 /// Async event stream for a [`CentralManager`].
 ///
 /// Subscribe with [`CentralManagerEventStream::subscribe`] and
@@ -379,7 +417,7 @@ unsafe impl Sync for SubscriptionHandleCm {}
 /// Apple delegate.
 pub struct CentralManagerEventStream {
     inner: BoundedAsyncStream<CentralManagerEvent>,
-    _handle: SubscriptionHandleCm,
+    _handle: Subscription<CentralManagerEvent>,
 }
 
 impl CentralManagerEventStream {
@@ -389,25 +427,15 @@ impl CentralManagerEventStream {
     /// Panics if `capacity` is 0.
     pub fn subscribe(manager: &CentralManager, capacity: usize) -> Self {
         let (stream, sender) = BoundedAsyncStream::new(capacity);
-        let sender_ptr = Box::into_raw(Box::new(sender));
-        let manager_ptr = manager.as_raw();
-        // SAFETY: manager_ptr is a valid CBCentralManager handle for the lifetime of
-        // `manager`.  sender_ptr is a valid heap allocation; ownership is transferred
-        // to the SubscriptionHandleCm which frees it in Drop after unsubscribing.
-        let swift_handle = unsafe {
-            crate::ffi::cb_central_manager_stream_subscribe(
-                manager_ptr,
-                central_manager_event_cb,
-                sender_ptr.cast(),
-            )
-        };
         Self {
             inner: stream,
-            _handle: SubscriptionHandleCm {
-                manager_ptr,
-                swift_handle,
-                sender_ptr,
-            },
+            _handle: Subscription::new(
+                manager.as_raw(),
+                sender,
+                central_manager_event_cb,
+                crate::ffi::cb_central_manager_stream_subscribe,
+                crate::ffi::cb_central_manager_stream_unsubscribe,
+            ),
         }
     }
 
@@ -602,58 +630,15 @@ fn peripheral_event_from_envelope(env: EventEnvelope) -> Option<PeripheralEvent>
 }
 
 unsafe extern "C" fn peripheral_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    if ctx.is_null() || payload.is_null() {
-        return;
-    }
-    doom_fish_utils::panic_safe::catch_user_panic("peripheral_event_cb", || {
-        // SAFETY: ctx is a valid *mut AsyncStreamSender<PeripheralEvent> created via
-        // Box::into_raw in PeripheralEventStream::subscribe and kept alive until Drop
-        // calls Box::from_raw after unsubscribing the Swift bridge.
-        let sender = unsafe { &*ctx.cast::<AsyncStreamSender<PeripheralEvent>>() };
-        // SAFETY: payload is a non-null, NUL-terminated C string for the duration of
-        // this call.
-        let json = unsafe { core::ffi::CStr::from_ptr(payload) }
-            .to_str()
-            .unwrap_or_default();
-        if let Ok(env) = serde_json::from_str::<EventEnvelope>(json) {
-            if let Some(event) = peripheral_event_from_envelope(env) {
-                sender.push(event);
-            }
-        }
-    });
-}
-
-struct SubscriptionHandlePe {
-    peripheral_ptr: *mut c_void,
-    swift_handle: *mut c_void,
-    sender_ptr: *mut AsyncStreamSender<PeripheralEvent>,
-}
-
-impl Drop for SubscriptionHandlePe {
-    fn drop(&mut self) {
-        if !self.swift_handle.is_null() {
-            // SAFETY: swift_handle is the retained opaque reference returned by
-            // cb_peripheral_stream_subscribe, released here exactly once.
-            unsafe {
-                crate::ffi::cb_peripheral_stream_unsubscribe(
-                    self.peripheral_ptr,
-                    self.swift_handle,
-                );
-            }
-        }
-        if !self.sender_ptr.is_null() {
-            // SAFETY: sender_ptr was created via Box::into_raw in subscribe and is
-            // not freed anywhere else.  Unsubscribe was called above so the Swift
-            // bridge no longer holds this pointer as its ctx.
-            unsafe {
-                let _ = Box::from_raw(self.sender_ptr);
-            }
-        }
+    unsafe {
+        deliver_event(
+            ctx,
+            payload,
+            "peripheral_event_cb",
+            peripheral_event_from_envelope,
+        );
     }
 }
-
-unsafe impl Send for SubscriptionHandlePe {}
-unsafe impl Sync for SubscriptionHandlePe {}
 
 /// Async event stream for a [`Peripheral`].
 ///
@@ -661,7 +646,7 @@ unsafe impl Sync for SubscriptionHandlePe {}
 /// await events with `.next().await`.
 pub struct PeripheralEventStream {
     inner: BoundedAsyncStream<PeripheralEvent>,
-    _handle: SubscriptionHandlePe,
+    _handle: Subscription<PeripheralEvent>,
 }
 
 impl PeripheralEventStream {
@@ -671,25 +656,15 @@ impl PeripheralEventStream {
     /// Panics if `capacity` is 0.
     pub fn subscribe(peripheral: &Peripheral, capacity: usize) -> Self {
         let (stream, sender) = BoundedAsyncStream::new(capacity);
-        let sender_ptr = Box::into_raw(Box::new(sender));
-        let peripheral_ptr = peripheral.as_raw();
-        // SAFETY: peripheral_ptr is a valid CBPeripheral handle for the lifetime of
-        // `peripheral`.  sender_ptr is a valid heap allocation owned by the returned
-        // SubscriptionHandlePe which frees it in Drop after unsubscribing.
-        let swift_handle = unsafe {
-            crate::ffi::cb_peripheral_stream_subscribe(
-                peripheral_ptr,
-                peripheral_event_cb,
-                sender_ptr.cast(),
-            )
-        };
         Self {
             inner: stream,
-            _handle: SubscriptionHandlePe {
-                peripheral_ptr,
-                swift_handle,
-                sender_ptr,
-            },
+            _handle: Subscription::new(
+                peripheral.as_raw(),
+                sender,
+                peripheral_event_cb,
+                crate::ffi::cb_peripheral_stream_subscribe,
+                crate::ffi::cb_peripheral_stream_unsubscribe,
+            ),
         }
     }
 
@@ -793,11 +768,11 @@ fn peripheral_manager_event_from_envelope(env: EventEnvelope) -> Option<Peripher
             service: Service::from_retained_handle(env.service_handle?),
             error: env.error,
         }),
-        "didSubscribeCentral" => Some(PeripheralManagerEvent::DidSubscribeCentral {
+        "didSubscribeToCharacteristic" => Some(PeripheralManagerEvent::DidSubscribeCentral {
             central: Central::from_retained_handle(env.central_handle?),
             characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
         }),
-        "didUnsubscribeCentral" => Some(PeripheralManagerEvent::DidUnsubscribeCentral {
+        "didUnsubscribeFromCharacteristic" => Some(PeripheralManagerEvent::DidUnsubscribeCentral {
             central: Central::from_retained_handle(env.central_handle?),
             characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
         }),
@@ -830,63 +805,20 @@ fn peripheral_manager_event_from_envelope(env: EventEnvelope) -> Option<Peripher
 }
 
 unsafe extern "C" fn peripheral_manager_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    if ctx.is_null() || payload.is_null() {
-        return;
-    }
-    doom_fish_utils::panic_safe::catch_user_panic("peripheral_manager_event_cb", || {
-        // SAFETY: ctx is a valid *mut AsyncStreamSender<PeripheralManagerEvent> created
-        // via Box::into_raw in PeripheralManagerEventStream::subscribe and kept alive
-        // until Drop calls Box::from_raw after unsubscribing the Swift bridge.
-        let sender = unsafe { &*ctx.cast::<AsyncStreamSender<PeripheralManagerEvent>>() };
-        // SAFETY: payload is a non-null, NUL-terminated C string for the duration of
-        // this call.
-        let json = unsafe { core::ffi::CStr::from_ptr(payload) }
-            .to_str()
-            .unwrap_or_default();
-        if let Ok(env) = serde_json::from_str::<EventEnvelope>(json) {
-            if let Some(event) = peripheral_manager_event_from_envelope(env) {
-                sender.push(event);
-            }
-        }
-    });
-}
-
-struct SubscriptionHandlePm {
-    manager_ptr: *mut c_void,
-    swift_handle: *mut c_void,
-    sender_ptr: *mut AsyncStreamSender<PeripheralManagerEvent>,
-}
-
-impl Drop for SubscriptionHandlePm {
-    fn drop(&mut self) {
-        if !self.swift_handle.is_null() {
-            // SAFETY: swift_handle is the retained opaque reference returned by
-            // cb_peripheral_manager_stream_subscribe, released here exactly once.
-            unsafe {
-                crate::ffi::cb_peripheral_manager_stream_unsubscribe(
-                    self.manager_ptr,
-                    self.swift_handle,
-                );
-            }
-        }
-        if !self.sender_ptr.is_null() {
-            // SAFETY: sender_ptr was created via Box::into_raw in subscribe and is
-            // not freed anywhere else.  Unsubscribe was called above so the Swift
-            // bridge no longer holds this pointer as its ctx.
-            unsafe {
-                let _ = Box::from_raw(self.sender_ptr);
-            }
-        }
+    unsafe {
+        deliver_event(
+            ctx,
+            payload,
+            "peripheral_manager_event_cb",
+            peripheral_manager_event_from_envelope,
+        );
     }
 }
-
-unsafe impl Send for SubscriptionHandlePm {}
-unsafe impl Sync for SubscriptionHandlePm {}
 
 /// Async event stream for a [`PeripheralManager`].
 pub struct PeripheralManagerEventStream {
     inner: BoundedAsyncStream<PeripheralManagerEvent>,
-    _handle: SubscriptionHandlePm,
+    _handle: Subscription<PeripheralManagerEvent>,
 }
 
 impl PeripheralManagerEventStream {
@@ -896,25 +828,15 @@ impl PeripheralManagerEventStream {
     /// Panics if `capacity` is 0.
     pub fn subscribe(manager: &PeripheralManager, capacity: usize) -> Self {
         let (stream, sender) = BoundedAsyncStream::new(capacity);
-        let sender_ptr = Box::into_raw(Box::new(sender));
-        let manager_ptr = manager.as_raw();
-        // SAFETY: manager_ptr is a valid CBPeripheralManager handle for the lifetime of
-        // `manager`.  sender_ptr is a valid heap allocation owned by the returned
-        // SubscriptionHandlePm which frees it in Drop after unsubscribing.
-        let swift_handle = unsafe {
-            crate::ffi::cb_peripheral_manager_stream_subscribe(
-                manager_ptr,
-                peripheral_manager_event_cb,
-                sender_ptr.cast(),
-            )
-        };
         Self {
             inner: stream,
-            _handle: SubscriptionHandlePm {
-                manager_ptr,
-                swift_handle,
-                sender_ptr,
-            },
+            _handle: Subscription::new(
+                manager.as_raw(),
+                sender,
+                peripheral_manager_event_cb,
+                crate::ffi::cb_peripheral_manager_stream_subscribe,
+                crate::ffi::cb_peripheral_manager_stream_unsubscribe,
+            ),
         }
     }
 
@@ -931,5 +853,66 @@ impl PeripheralManagerEventStream {
     /// Returns the number of currently buffered events.
     pub fn buffered_count(&self) -> usize {
         self.inner.buffered_count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use doom_fish_utils::stream::BoundedAsyncStream;
+
+    use super::{
+        central_manager_event_cb, peripheral_manager_event_cb, CentralManagerEvent,
+        PeripheralManagerEvent, Subscription,
+    };
+    use crate::{CentralManager, PeripheralManager};
+
+    fn closes_soon<T>(stream: &BoundedAsyncStream<T>) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if stream.is_closed() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        stream.is_closed()
+    }
+
+    #[test]
+    fn unsubscribing_releases_the_swift_sink_and_its_sender() {
+        let manager = CentralManager::new().expect("central manager");
+        let (stream, sender) = BoundedAsyncStream::<CentralManagerEvent>::new(4);
+        let subscription = Subscription::new(
+            manager.as_raw(),
+            sender,
+            central_manager_event_cb,
+            crate::ffi::cb_central_manager_stream_subscribe,
+            crate::ffi::cb_central_manager_stream_unsubscribe,
+        );
+        assert!(!subscription.sink.is_null());
+        assert!(!stream.is_closed());
+
+        drop(subscription);
+        assert!(closes_soon(&stream));
+    }
+
+    #[test]
+    fn a_subscription_keeps_a_dropped_manager_alive_until_it_unsubscribes() {
+        let manager = PeripheralManager::new().expect("peripheral manager");
+        let (stream, sender) = BoundedAsyncStream::<PeripheralManagerEvent>::new(4);
+        let subscription = Subscription::new(
+            manager.as_raw(),
+            sender,
+            peripheral_manager_event_cb,
+            crate::ffi::cb_peripheral_manager_stream_subscribe,
+            crate::ffi::cb_peripheral_manager_stream_unsubscribe,
+        );
+        drop(manager);
+        std::thread::sleep(Duration::from_millis(20));
+        assert!(!stream.is_closed());
+
+        drop(subscription);
+        assert!(closes_soon(&stream));
     }
 }

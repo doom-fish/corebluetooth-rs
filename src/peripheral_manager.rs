@@ -902,13 +902,17 @@ impl PeripheralManager {
 }
 
 impl Drop for PeripheralManager {
-    // Release the Swift manager box first: its `deinit` drops the delegate
-    // bridge object, whose own `deinit` releases the Swift-held +1 on the
-    // `CallbackState` via the context-release trampoline. Only afterwards do we
-    // drop this Rust-held reference. The `CallbackState` box is freed only once
-    // both Rust and Swift have released, so a callback already in flight on the
-    // peripheral-manager dispatch queue can never observe a freed context.
+    // Detach and deactivate the delegate sink, then release the Swift manager
+    // box (async streams may keep it alive). The sink's own `deinit` releases
+    // the Swift-held +1 on the `CallbackState` via the context-release
+    // trampoline. Only afterwards do we drop this Rust-held reference. The
+    // `CallbackState` box is freed only once both Rust and Swift have released,
+    // so a callback already in flight on the peripheral-manager dispatch queue
+    // can never observe a freed context.
     fn drop(&mut self) {
+        if !self.callback_state.is_null() {
+            unsafe { ffi::cb_peripheral_manager_detach_delegate(self.raw) };
+        }
         unsafe { ffi::cb_object_release(self.raw) };
         unsafe { CallbackState::release(self.callback_state) };
     }

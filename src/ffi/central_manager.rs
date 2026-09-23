@@ -14,6 +14,7 @@ extern "C" {
         out_manager: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
+    pub fn cb_manager_detach_delegate(manager: *mut c_void);
     pub fn cb_manager_state(manager: *mut c_void) -> i32;
     pub fn cb_manager_authorization(manager: *mut c_void) -> i32;
     pub fn cb_manager_global_authorization() -> i32;

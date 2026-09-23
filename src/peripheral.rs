@@ -734,11 +734,12 @@ impl Peripheral {
 
     /// Clears the current `CBPeripheralDelegate` bridge.
     pub fn clear_delegate(&mut self) {
-        // Swift drops the stored delegate, whose `deinit` releases the
-        // Swift-held +1 via the context-release trampoline. Afterwards we drop
-        // this Rust-held reference. The state is freed only once both sides have
-        // released, so an in-flight callback can never observe a freed context.
-        unsafe { ffi::cb_peripheral_clear_delegate(self.raw) };
+        // Swift drops the stored delegate if this handle installed it, and its
+        // `deinit` releases the Swift-held +1 via the context-release
+        // trampoline. Afterwards we drop this Rust-held reference. The state is
+        // freed only once both sides have released, so an in-flight callback
+        // can never observe a freed context.
+        unsafe { ffi::cb_peripheral_clear_delegate(self.raw, self.callback_state.cast()) };
         unsafe { CallbackState::release(self.callback_state) };
         self.callback_state = core::ptr::null_mut();
     }
@@ -1018,7 +1019,7 @@ impl Clone for Peripheral {
 impl Drop for Peripheral {
     fn drop(&mut self) {
         if !self.callback_state.is_null() {
-            unsafe { ffi::cb_peripheral_clear_delegate(self.raw) };
+            unsafe { ffi::cb_peripheral_clear_delegate(self.raw, self.callback_state.cast()) };
         }
         unsafe { ffi::cb_object_release(self.raw) };
         unsafe { CallbackState::release(self.callback_state) };

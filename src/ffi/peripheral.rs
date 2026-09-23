@@ -13,7 +13,7 @@ extern "C" {
         context_release: Option<ContextRefCallback>,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn cb_peripheral_clear_delegate(peripheral: *mut c_void);
+    pub fn cb_peripheral_clear_delegate(peripheral: *mut c_void, user_info: *mut c_void);
     pub fn cb_peripheral_name(peripheral: *mut c_void) -> *mut c_char;
     pub fn cb_peripheral_identifier(peripheral: *mut c_void) -> *mut c_char;
     pub fn cb_peripheral_state(peripheral: *mut c_void) -> i32;

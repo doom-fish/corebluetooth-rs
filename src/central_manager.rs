@@ -907,13 +907,16 @@ impl CentralManager {
 }
 
 impl Drop for CentralManager {
-    // Release the Swift manager box first: its `deinit` drops the delegate
-    // bridge object, whose own `deinit` releases the Swift-held +1 on the
-    // `CallbackState` via the context-release trampoline. Only afterwards do we
-    // drop this Rust-held reference, so a scan/connect callback already in
-    // flight on the central-manager dispatch queue can never observe a freed
-    // context.
+    // Detach and deactivate the delegate sink, then release the Swift manager
+    // box (async streams may keep it alive). The sink's own `deinit` releases
+    // the Swift-held +1 on the `CallbackState` via the context-release
+    // trampoline. Only afterwards do we drop this Rust-held reference, so a
+    // scan/connect callback already in flight on the central-manager dispatch
+    // queue can never observe a freed context.
     fn drop(&mut self) {
+        if !self.callback_state.is_null() {
+            unsafe { ffi::cb_manager_detach_delegate(self.raw) };
+        }
         unsafe { ffi::cb_object_release(self.raw) };
         unsafe { CallbackState::release(self.callback_state) };
     }
