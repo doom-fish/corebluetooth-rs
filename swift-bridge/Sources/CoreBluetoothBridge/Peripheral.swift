@@ -449,6 +449,13 @@ public func cb_peripheral_write_value_for_descriptor(
         cb_write_error(errorOut, "peripheral, descriptor, and value bytes must not be null")
         return CBR_INVALID_ARGUMENT
     }
+    guard descriptor.uuid != CBUUID(string: CBUUIDClientCharacteristicConfigurationString) else {
+        cb_write_error(
+            errorOut,
+            "the Client Characteristic Configuration descriptor (0x2902) cannot be written; use set_notify_value"
+        )
+        return CBR_INVALID_ARGUMENT
+    }
 
     peripheral.writeValue(Data(bytes: bytes, count: length), for: descriptor)
     return CBR_OK

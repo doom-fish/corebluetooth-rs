@@ -980,6 +980,11 @@ impl Peripheral {
         descriptor: &Descriptor,
         value: &[u8],
     ) -> Result<(), CoreBluetoothError> {
+        if is_client_characteristic_configuration(&descriptor.uuid()) {
+            return Err(CoreBluetoothError::InvalidArgument(
+                "the Client Characteristic Configuration descriptor (0x2902) cannot be written; use Peripheral::set_notify_value".into(),
+            ));
+        }
         let mut error = core::ptr::null_mut();
         let status = unsafe {
             ffi::cb_peripheral_write_value_for_descriptor(
@@ -1010,6 +1015,11 @@ impl Peripheral {
     }
 }
 
+fn is_client_characteristic_configuration(uuid: &str) -> bool {
+    uuid.eq_ignore_ascii_case("2902")
+        || uuid.eq_ignore_ascii_case("00002902-0000-1000-8000-00805F9B34FB")
+}
+
 impl Clone for Peripheral {
     fn clone(&self) -> Self {
         Self::from_retained_raw(unsafe { ffi::cb_object_retain(self.raw) })
@@ -1023,5 +1033,26 @@ impl Drop for Peripheral {
         }
         unsafe { ffi::cb_object_release(self.raw) };
         unsafe { CallbackState::release(self.callback_state) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_client_characteristic_configuration;
+    use crate::uuid::BluetoothUuid;
+
+    #[test]
+    fn detects_the_client_characteristic_configuration_descriptor() {
+        assert!(is_client_characteristic_configuration("2902"));
+        assert!(is_client_characteristic_configuration(
+            "00002902-0000-1000-8000-00805f9b34fb"
+        ));
+        assert!(is_client_characteristic_configuration(
+            &BluetoothUuid::client_characteristic_configuration().uuid_string()
+        ));
+        assert!(!is_client_characteristic_configuration("2901"));
+        assert!(!is_client_characteristic_configuration(
+            &BluetoothUuid::server_characteristic_configuration().uuid_string()
+        ));
     }
 }
