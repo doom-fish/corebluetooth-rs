@@ -1,5 +1,65 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.4.0] - Unreleased
+
+### Security
+
+- The async streams handed the Swift bridge a raw pointer to their sender
+  with no retain and unsubscribed without waiting for the CoreBluetooth queue,
+  so an event in flight could push into freed memory. Each stream sink now
+  holds a reference to its context until it is deallocated, and dropping a
+  stream waits for an event that is being delivered.
+- `CentralManagerEventStream`, `PeripheralEventStream` and
+  `PeripheralManagerEventStream` kept no reference to the manager or
+  peripheral, so dropping it first made unsubscribing read freed memory. A
+  stream now keeps its manager or peripheral alive.
+- Unsubscribing re-installed the delegate captured at subscribe time, which
+  could be a stream that had already been dropped; the next event then went
+  to freed memory. Delegates and streams are now fanned out from one bridge
+  delegate per object, and nothing is re-installed.
+- `CBPeripheral`, `CBCentralManager` and `CBPeripheralManager` delegates held
+  an unretained Rust context that could be freed while a callback was running
+  (fixed after 0.3.6, first released here).
+
+### Fixed
+
+- Dropping a `CentralManager` or `PeripheralManager` stops its delegate even
+  while async streams keep the manager alive.
+- A `Peripheral` clears only the delegate that it installed, so dropping one
+  clone no longer removes a delegate that another clone set.
+- Async streams receive disconnects that macOS 14 and later report through the
+  timestamped `didDisconnectPeripheral` delegate method.
+- Retained handles in events that a stream ignores or receives after it was
+  dropped are released instead of leaking.
+- `Peripheral::write_value_for_descriptor` refuses the Client Characteristic
+  Configuration descriptor (0x2902) with `InvalidArgument` and points to
+  `set_notify_value`.
+- Clippy 1.98's `borrow_as_ptr` warnings (`&raw mut` at the bridge calls).
+
+### Changed
+
+- **Breaking:** the raw `ffi` stream functions take context retain/release
+  callbacks and return a sink handle; `cb_peripheral_clear_delegate` takes the
+  delegate's context; `cb_characteristic_value_json` and
+  `cb_att_request_value_json` are replaced by `cb_characteristic_copy_value`
+  and `cb_att_request_copy_value`.
+- `Characteristic::value` and `AttRequest::value` receive raw bytes from the
+  bridge instead of a JSON number array.
+- `rust-version` is 1.82 (was 1.76). Requires `apple-cf >=0.11, <0.12` and
+  `doom-fish-utils >=0.4.1, <0.5`.
+
+### Added
+
+- `InputStreamHandle::read` and `OutputStreamHandle::write` for L2CAP channel
+  streams.
+- `ffi::cb_manager_detach_delegate` and
+  `ffi::cb_peripheral_manager_detach_delegate`.
+
 ## [0.3.6] - 2026-05-20
 
 - Clippy hygiene sweep: cleared all `-D warnings` lints across the crate. No public API change.
