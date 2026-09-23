@@ -6,6 +6,12 @@ GAPS: 0
 EXEMPT: 11
 COVERAGE_PCT: 100.0%
 
+> Caveat (0.4.0): these counts cover top-level symbols only (classes,
+> protocols, typedefs, constants), not their methods or properties, and were
+> generated against `MacOSX26.2.sdk` without being regenerated for the installed
+> 26.5 SDK. A VERIFIED class can still have unwrapped members; see
+> `COVERAGE.md` for the member-level table.
+
 Audit scope: enumeration of 75 top-level public CoreBluetooth symbols (`@interface`, `@protocol`, `typedef enum`, `typedef struct`, `FOUNDATION_EXPORT` constants) from the macOS 26.2 SDK. Cross-referenced against `src/**/*.rs` and `swift-bridge/Sources/**/*.swift` to verify safe wrapper coverage. The 11 EXEMPT symbols are all clearly macOS-unavailable (either `API_UNAVAILABLE(macos)` or `NS_AVAILABLE_IOS`-only) or deprecated via `NS_DEPRECATED`, and carry explicit SDK availability citations. No sampled audit—all 75 symbols verified.
 
 ## 🟢 VERIFIED

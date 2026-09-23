@@ -1,4 +1,9 @@
-# CoreBluetooth.framework coverage audit (`corebluetooth-rs` v0.2.0)
+# CoreBluetooth.framework coverage audit
+
+Last reviewed for `corebluetooth-rs` 0.4.0. A ✅ row means the Rust surface
+reaches the named API; it is not a behaviour guarantee. Until 0.4.0 the async
+streams could use freed memory after unsubscribing and the L2CAP stream
+handles could not move data (see `CHANGELOG.md`).
 
 Legend:
 
@@ -116,7 +121,7 @@ Legend:
 | `setNotifyValue:forCharacteristic:` | ✅ implemented | `Peripheral::set_notify_value()` | |
 | `discoverDescriptorsForCharacteristic:` | ✅ implemented | `Peripheral::discover_descriptors()` | |
 | `readValueForDescriptor:` | ✅ implemented | `Peripheral::read_value_for_descriptor()` | |
-| `writeValue:forDescriptor:` | ✅ implemented | `Peripheral::write_value_for_descriptor()` | |
+| `writeValue:forDescriptor:` | ✅ implemented | `Peripheral::write_value_for_descriptor()` | The Client Characteristic Configuration descriptor (0x2902) is refused with `InvalidArgument`; use `set_notify_value()`. |
 | `openL2CAPChannel:` | ✅ implemented | `Peripheral::open_l2cap_channel()` | macOS 10.14+ runtime-gated in the Swift bridge. |
 | `peripheralDidUpdateName:` | ✅ implemented | delegate callback | |
 | `peripheral:didModifyServices:` | ✅ implemented | delegate callback | |
@@ -193,8 +198,8 @@ Legend:
 | --- | --- | --- | --- |
 | `CBL2CAPPSM` | ✅ implemented | `u16` PSM values in `L2capChannel` / manager methods | |
 | `CBL2CAPChannel.peer` | ✅ implemented | `L2capChannel::peer()` | Uses generic `Peer` wrapper with `identifier()`. |
-| `CBL2CAPChannel.inputStream` | ✅ implemented | `L2capChannel::input_stream()` | Returned as `InputStreamHandle`. |
-| `CBL2CAPChannel.outputStream` | ✅ implemented | `L2capChannel::output_stream()` | Returned as `OutputStreamHandle`. |
+| `CBL2CAPChannel.inputStream` | ✅ implemented | `L2capChannel::input_stream()` | Returned as `InputStreamHandle`: `open`, `close`, `status`, `has_bytes_available` and a blocking `read`. Not scheduled on a run loop and no stream delegate. |
+| `CBL2CAPChannel.outputStream` | ✅ implemented | `L2capChannel::output_stream()` | Returned as `OutputStreamHandle`: `open`, `close`, `status`, `has_space_available` and a blocking `write`. Not scheduled on a run loop and no stream delegate. |
 | `CBL2CAPChannel.PSM` | ✅ implemented | `L2capChannel::psm()` | |
 
 ## Advertisement (`CBAdvertisementData.h`)

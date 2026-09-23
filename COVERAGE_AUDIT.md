@@ -6,6 +6,12 @@ GAPS: 0
 EXEMPT: 11
 COVERAGE_PCT: 100.0%
 
+> Caveat (0.4.0): these counts cover top-level symbols only (classes,
+> protocols, typedefs, constants), not their methods or properties, and were
+> generated against `MacOSX26.2.sdk` without being regenerated for the installed
+> 26.5 SDK. A VERIFIED class can still have unwrapped members; see
+> `COVERAGE.md` for the member-level table.
+
 Audit scope: top-level public CoreBluetooth symbols (`@interface`, `@protocol`, `typedef`, exported constants) from the macOS 26.2 SDK, per the audit instructions. Member-level reachability was spot-checked against `src/**/*.rs`, `swift-bridge/Sources/**/*.swift`, and the crate's existing `COVERAGE.md`.
 
 ## 🟢 VERIFIED
