@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use crate::error::take_owned_c_string;
+use crate::error::{from_swift, take_owned_c_string, CoreBluetoothError};
 use crate::ffi;
 use crate::private::retained_handle_to_raw;
 use crate::retained::cb_retained;
@@ -90,6 +90,17 @@ impl InputStreamHandle {
     pub fn close(&self) {
         unsafe { ffi::cb_stream_close(self.raw) };
     }
+
+    pub fn read(&self, buffer: &mut [u8]) -> Result<usize, CoreBluetoothError> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        let mut error = core::ptr::null_mut();
+        let count = unsafe {
+            ffi::cb_input_stream_read(self.raw, buffer.as_mut_ptr(), buffer.len(), &raw mut error)
+        };
+        usize::try_from(count).map_err(|_| from_swift(ffi::status::FRAMEWORK_ERROR, error))
+    }
 }
 
 cb_retained!(InputStreamHandle);
@@ -122,6 +133,17 @@ impl OutputStreamHandle {
     /// Closes `CBL2CAPChannel.outputStream`.
     pub fn close(&self) {
         unsafe { ffi::cb_stream_close(self.raw) };
+    }
+
+    pub fn write(&self, bytes: &[u8]) -> Result<usize, CoreBluetoothError> {
+        if bytes.is_empty() {
+            return Ok(0);
+        }
+        let mut error = core::ptr::null_mut();
+        let count = unsafe {
+            ffi::cb_output_stream_write(self.raw, bytes.as_ptr(), bytes.len(), &raw mut error)
+        };
+        usize::try_from(count).map_err(|_| from_swift(ffi::status::FRAMEWORK_ERROR, error))
     }
 }
 
@@ -167,3 +189,49 @@ impl L2capChannel {
 }
 
 cb_retained!(L2capChannel);
+
+#[cfg(test)]
+mod tests {
+    use apple_cf::cf::CFStreamPair;
+
+    use super::{InputStreamHandle, OutputStreamHandle, StreamStatus};
+    use crate::private::retain_raw;
+
+    fn bound_pair() -> (InputStreamHandle, OutputStreamHandle) {
+        let pair = CFStreamPair::new(64);
+        (
+            InputStreamHandle::from_retained_raw(retain_raw(pair.read.as_ptr())),
+            OutputStreamHandle::from_retained_raw(retain_raw(pair.write.as_ptr())),
+        )
+    }
+
+    #[test]
+    fn channel_streams_move_bytes_through_the_bridge() {
+        let (input, output) = bound_pair();
+        input.open();
+        output.open();
+        assert_eq!(input.status(), StreamStatus::Open);
+        assert!(output.has_space_available());
+
+        assert_eq!(output.write(b"ping").expect("write"), 4);
+        assert!(input.has_bytes_available());
+        let mut buffer = [0_u8; 16];
+        let read = input.read(&mut buffer).expect("read");
+        assert_eq!(&buffer[..read], b"ping");
+
+        assert_eq!(output.write(&[]).expect("empty write"), 0);
+        assert_eq!(input.read(&mut []).expect("empty read"), 0);
+
+        output.close();
+        assert_eq!(input.read(&mut buffer).expect("read at end"), 0);
+        input.close();
+    }
+
+    #[test]
+    fn streams_that_are_not_open_report_errors() {
+        let (input, output) = bound_pair();
+        let mut buffer = [0_u8; 4];
+        assert!(input.read(&mut buffer).is_err());
+        assert!(output.write(b"data").is_err());
+    }
+}
