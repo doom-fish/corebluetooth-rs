@@ -3,7 +3,7 @@ use core::ffi::c_void;
 use crate::descriptor::Descriptor;
 use crate::error::{take_owned_c_string, CoreBluetoothError};
 use crate::ffi;
-use crate::private::{decode_optional_json, retained_handle_to_raw, take_retained_pointer_array};
+use crate::private::{retained_handle_to_raw, take_copied_bytes, take_retained_pointer_array};
 use crate::retained::cb_retained;
 use crate::service::Service;
 use crate::uuid::BluetoothUuid;
@@ -128,8 +128,9 @@ impl Characteristic {
 
     /// Returns the value exposed by `CBCharacteristic`.
     pub fn value(&self) -> Result<Option<Vec<u8>>, CoreBluetoothError> {
-        let json = unsafe { ffi::cb_characteristic_value_json(self.raw) };
-        decode_optional_json(json)
+        Ok(take_copied_bytes(|bytes, length| unsafe {
+            ffi::cb_characteristic_copy_value(self.raw, bytes, length)
+        }))
     }
 
     /// Returns whether `CBCharacteristic.isNotifying` is set.

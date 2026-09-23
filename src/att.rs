@@ -4,7 +4,7 @@ use crate::characteristic::Characteristic;
 use crate::error::{take_owned_c_string, CoreBluetoothError};
 use crate::ffi;
 use crate::peripheral_manager::Central;
-use crate::private::{decode_optional_json, retained_handle_to_raw};
+use crate::private::{retained_handle_to_raw, take_copied_bytes};
 use crate::retained::cb_retained;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,8 +106,9 @@ impl AttRequest {
 
     /// Returns the value attached to this `CBATTRequest`.
     pub fn value(&self) -> Result<Option<Vec<u8>>, CoreBluetoothError> {
-        let json = unsafe { ffi::cb_att_request_value_json(self.raw) };
-        decode_optional_json(json)
+        Ok(take_copied_bytes(|bytes, length| unsafe {
+            ffi::cb_att_request_copy_value(self.raw, bytes, length)
+        }))
     }
 
     /// Sets the value that `CoreBluetooth` should use when responding to this `CBATTRequest`.

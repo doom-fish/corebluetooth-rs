@@ -17,3 +17,34 @@ fn characteristic_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(characteristic_view.value()?, Some(vec![1, 2, 3]));
     Ok(())
 }
+
+#[test]
+fn characteristic_values_keep_empty_and_missing_values_apart(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let uuid = BluetoothUuid::from_string("2A38")?;
+    let empty = MutableCharacteristic::new(
+        &uuid,
+        CharacteristicProperties::READ,
+        Some(&[]),
+        AttributePermissions::READABLE,
+    )?;
+    assert_eq!(empty.as_characteristic().value()?, Some(Vec::new()));
+
+    let missing = MutableCharacteristic::new(
+        &uuid,
+        CharacteristicProperties::NOTIFY,
+        None,
+        AttributePermissions::READABLE,
+    )?;
+    assert_eq!(missing.as_characteristic().value()?, None);
+
+    let bytes: Vec<u8> = (0..=255).collect();
+    let full = MutableCharacteristic::new(
+        &uuid,
+        CharacteristicProperties::READ,
+        Some(&bytes),
+        AttributePermissions::READABLE,
+    )?;
+    assert_eq!(full.as_characteristic().value()?, Some(bytes));
+    Ok(())
+}

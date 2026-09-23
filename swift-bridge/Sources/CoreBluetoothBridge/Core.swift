@@ -199,6 +199,23 @@ func cb_json_string(_ value: Any) -> String {
     return "null"
 }
 
+func cb_copy_bytes(
+    _ data: Data?,
+    _ outBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    _ outLength: UnsafeMutablePointer<Int>
+) -> Bool {
+    outBytes.pointee = nil
+    outLength.pointee = 0
+    guard let data else { return false }
+    guard !data.isEmpty, let buffer = malloc(data.count)?.assumingMemoryBound(to: UInt8.self) else {
+        return true
+    }
+    data.copyBytes(to: buffer, count: data.count)
+    outBytes.pointee = buffer
+    outLength.pointee = data.count
+    return true
+}
+
 func cb_error_object(_ error: Error) -> [String: Any] {
     let nsError = error as NSError
     return [
