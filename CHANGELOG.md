@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CBPeripheral`, `CBCentralManager` and `CBPeripheralManager` delegates held
   an unretained Rust context that could be freed while a callback was running
   (fixed after 0.3.6, first released here).
+- Stream events crossed from the CoreBluetooth queue as values holding
+  `Peripheral`, `Service`, `Characteristic`, `Descriptor`, `Central`,
+  `AttRequest` and `L2capChannel` wrappers, under a blanket
+  `unsafe impl Send`/`Sync` for any event type, although CoreBluetooth
+  documents none of these objects as thread-safe. Only plain data and retained
+  object handles cross now; the stream builds the wrappers on the thread that
+  polls it and releases the handles of events it drops.
 
 ### Fixed
 
@@ -43,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `CentralManagerEventStream::next`, `PeripheralEventStream::next`
+  and `PeripheralManagerEventStream::next` return `async_api::NextEvent<'_, E>`
+  instead of `doom_fish_utils::stream::NextItem<'_, E>`. Awaiting it still
+  yields `Option<E>`; like the events it builds, it is not `Send`.
 - **Breaking:** the raw `ffi` stream functions take context retain/release
   callbacks and return a sink handle; `cb_peripheral_clear_delegate` takes the
   delegate's context; `cb_characteristic_value_json` and

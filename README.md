@@ -34,6 +34,7 @@ corebluetooth-rs = { version = "0.4", features = ["async"] }
 
 - Each `CBCentralManager`, `CBPeripheralManager` and `CBPeripheral` has one bridge delegate that forwards every event to the Rust delegate and to every async stream, so delegates and streams can be added and dropped in any order.
 - A stream keeps its manager or peripheral alive. Dropping it waits for an event that is being delivered, then stops; dropping a manager stops its Rust delegate even while streams keep the manager alive.
+- Stream events leave the manager's dispatch queue as plain data and retained object handles. `next` and `try_next` build the `Peripheral`, `Service`, `Characteristic` and other wrappers on the thread that polls the stream; streams and their `next` futures are not `Send`, so that is the thread that owns the manager or peripheral.
 - `Peripheral::clear_delegate` and dropping a `Peripheral` remove only the delegate that handle installed.
 - `Peripheral::write_value_for_descriptor` refuses the Client Characteristic Configuration descriptor (0x2902); use `Peripheral::set_notify_value` to switch notifications.
 

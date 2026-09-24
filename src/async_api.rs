@@ -19,6 +19,10 @@
 
 use core::ffi::{c_char, c_void};
 use core::fmt;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::pin::Pin;
+use core::task::{ready, Context, Poll};
 
 use doom_fish_utils::callback_context::CallbackContext;
 use doom_fish_utils::stream::{AsyncStreamSender, BoundedAsyncStream, NextItem};
@@ -34,16 +38,10 @@ use crate::ffi::{ContextRefCallback, JsonCallback};
 use crate::l2cap_channel::L2capChannel;
 use crate::peripheral::Peripheral;
 use crate::peripheral_manager::{Central, PeripheralManager, PeripheralManagerState};
-use crate::private::retain_raw;
+use crate::private::{retain_raw, retained_handle_to_raw};
 use crate::service::Service;
 
-struct EventSink<E>(AsyncStreamSender<E>);
-
-#[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl<E> Send for EventSink<E> {}
-unsafe impl<E> Sync for EventSink<E> {}
-
-type SinkContext<E> = CallbackContext<EventSink<E>>;
+type SinkContext = CallbackContext<AsyncStreamSender<EventEnvelope>>;
 
 type SubscribeFn = unsafe extern "C" fn(
     *mut c_void,
@@ -54,30 +52,29 @@ type SubscribeFn = unsafe extern "C" fn(
 ) -> *mut c_void;
 type UnsubscribeFn = unsafe extern "C" fn(*mut c_void, *mut c_void);
 
-struct Subscription<E: 'static> {
+struct Subscription {
     owner: *mut c_void,
     sink: *mut c_void,
-    context: SinkContext<E>,
+    context: SinkContext,
     unsubscribe: UnsubscribeFn,
 }
 
-impl<E: 'static> Subscription<E> {
+impl Subscription {
     fn new(
         owner: *mut c_void,
-        sender: AsyncStreamSender<E>,
-        callback: JsonCallback,
+        sender: AsyncStreamSender<EventEnvelope>,
         subscribe: SubscribeFn,
         unsubscribe: UnsubscribeFn,
     ) -> Self {
         let owner = retain_raw(owner);
-        let context = SinkContext::new(EventSink(sender));
+        let context = SinkContext::new(sender);
         let sink = unsafe {
             subscribe(
                 owner,
-                callback,
+                stream_event_cb,
                 context.as_ptr(),
-                Some(SinkContext::<E>::RETAIN),
-                Some(SinkContext::<E>::RELEASE),
+                Some(SinkContext::RETAIN),
+                Some(SinkContext::RELEASE),
             )
         };
         Self {
@@ -89,7 +86,7 @@ impl<E: 'static> Subscription<E> {
     }
 }
 
-impl<E: 'static> Drop for Subscription<E> {
+impl Drop for Subscription {
     fn drop(&mut self) {
         self.context.deactivate();
         unsafe { (self.unsubscribe)(self.owner, self.sink) };
@@ -97,27 +94,19 @@ impl<E: 'static> Drop for Subscription<E> {
     }
 }
 
-unsafe fn deliver_event<E: 'static>(
-    ctx: *mut c_void,
-    payload: *const c_char,
-    site: &str,
-    convert: fn(EventEnvelope) -> Option<E>,
-) {
+unsafe extern "C" fn stream_event_cb(ctx: *mut c_void, payload: *const c_char) {
     if payload.is_null() {
         return;
     }
-    doom_fish_utils::panic_safe::catch_user_panic(site, || {
+    doom_fish_utils::panic_safe::catch_user_panic("stream_event_cb", || {
         let json = unsafe { core::ffi::CStr::from_ptr(payload) }
             .to_str()
             .unwrap_or_default();
-        let Some(event) = serde_json::from_str::<EventEnvelope>(json)
-            .ok()
-            .and_then(convert)
-        else {
+        let Ok(envelope) = serde_json::from_str::<EventEnvelope>(json) else {
             return;
         };
         unsafe {
-            SinkContext::<E>::with(ctx, site, |sink| sink.0.push(event));
+            SinkContext::with(ctx, "stream_event_cb", |sender| sender.push(envelope));
         }
     });
 }
@@ -142,6 +131,89 @@ struct EventEnvelope {
     request_handles: Option<Vec<u64>>,
     psm: Option<u16>,
     error: Option<BluetoothErrorInfo>,
+}
+
+impl Drop for EventEnvelope {
+    fn drop(&mut self) {
+        let handles = [
+            self.peripheral_handle,
+            self.service_handle,
+            self.characteristic_handle,
+            self.descriptor_handle,
+            self.channel_handle,
+            self.central_handle,
+            self.request_handle,
+        ];
+        let handle_lists = [
+            self.service_handles.as_deref(),
+            self.invalidated_service_handles.as_deref(),
+            self.characteristic_handles.as_deref(),
+            self.request_handles.as_deref(),
+        ];
+        for handle in handles
+            .into_iter()
+            .flatten()
+            .chain(handle_lists.into_iter().flatten().flatten().copied())
+        {
+            unsafe { crate::ffi::cb_object_release(retained_handle_to_raw(handle)) };
+        }
+    }
+}
+
+type ConvertFn<E> = fn(&mut EventEnvelope) -> Option<E>;
+
+pub struct NextEvent<'a, E> {
+    envelopes: &'a BoundedAsyncStream<EventEnvelope>,
+    pending: NextItem<'a, EventEnvelope>,
+    convert: ConvertFn<E>,
+    _polled_where_created: PhantomData<*const E>,
+}
+
+impl<E> fmt::Debug for NextEvent<'_, E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NextEvent").finish_non_exhaustive()
+    }
+}
+
+impl<E> Future for NextEvent<'_, E> {
+    type Output = Option<E>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        loop {
+            let Some(mut envelope) = ready!(Pin::new(&mut this.pending).poll(cx)) else {
+                return Poll::Ready(None);
+            };
+            if let Some(event) = (this.convert)(&mut envelope) {
+                return Poll::Ready(Some(event));
+            }
+            this.pending = this.envelopes.next();
+        }
+    }
+}
+
+fn next_event<E>(
+    envelopes: &BoundedAsyncStream<EventEnvelope>,
+    convert: ConvertFn<E>,
+) -> NextEvent<'_, E> {
+    NextEvent {
+        envelopes,
+        pending: envelopes.next(),
+        convert,
+        _polled_where_created: PhantomData,
+    }
+}
+
+fn try_next_event<E>(
+    envelopes: &BoundedAsyncStream<EventEnvelope>,
+    convert: ConvertFn<E>,
+) -> Option<E> {
+    loop {
+        let mut envelope = envelopes.try_next()?;
+        if let Some(event) = convert(&mut envelope) {
+            return Some(event);
+        }
+    }
 }
 
 /// An event emitted by a [`CentralManagerEventStream`].
@@ -189,40 +261,29 @@ fn parse_advertisement(raw: Option<serde_json::Value>) -> AdvertisementData {
         .unwrap_or_default()
 }
 
-fn central_manager_event_from_envelope(env: EventEnvelope) -> Option<CentralManagerEvent> {
+fn central_manager_event_from_envelope(env: &mut EventEnvelope) -> Option<CentralManagerEvent> {
     match env.event.as_str() {
         "didUpdateState" => Some(CentralManagerEvent::StateChanged {
             state: CentralManagerState::from_raw(env.state.unwrap_or_default()),
             authorization: ManagerAuthorization::from_raw(env.authorization.unwrap_or_default()),
         }),
         "didDiscoverPeripheral" => Some(CentralManagerEvent::PeripheralDiscovered {
-            peripheral: Peripheral::from_retained_handle(env.peripheral_handle?),
+            peripheral: Peripheral::from_retained_handle(env.peripheral_handle.take()?),
             rssi: env.rssi.unwrap_or_default(),
-            advertisement_data: parse_advertisement(env.advertisement_data),
+            advertisement_data: parse_advertisement(env.advertisement_data.take()),
         }),
         "didConnectPeripheral" => Some(CentralManagerEvent::PeripheralConnected {
-            peripheral: Peripheral::from_retained_handle(env.peripheral_handle?),
+            peripheral: Peripheral::from_retained_handle(env.peripheral_handle.take()?),
         }),
         "didFailToConnectPeripheral" => Some(CentralManagerEvent::PeripheralFailedToConnect {
-            peripheral: Peripheral::from_retained_handle(env.peripheral_handle?),
-            error: env.error,
+            peripheral: Peripheral::from_retained_handle(env.peripheral_handle.take()?),
+            error: env.error.take(),
         }),
         "didDisconnectPeripheral" => Some(CentralManagerEvent::PeripheralDisconnected {
-            peripheral: Peripheral::from_retained_handle(env.peripheral_handle?),
-            error: env.error,
+            peripheral: Peripheral::from_retained_handle(env.peripheral_handle.take()?),
+            error: env.error.take(),
         }),
         _ => None,
-    }
-}
-
-unsafe extern "C" fn central_manager_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    unsafe {
-        deliver_event(
-            ctx,
-            payload,
-            "central_manager_event_cb",
-            central_manager_event_from_envelope,
-        );
     }
 }
 
@@ -416,8 +477,8 @@ impl fmt::Debug for PeripheralManagerEvent {
 /// Dropping the stream automatically unsubscribes from the underlying
 /// Apple delegate.
 pub struct CentralManagerEventStream {
-    inner: BoundedAsyncStream<CentralManagerEvent>,
-    _handle: Subscription<CentralManagerEvent>,
+    inner: BoundedAsyncStream<EventEnvelope>,
+    _handle: Subscription,
 }
 
 impl CentralManagerEventStream {
@@ -432,7 +493,6 @@ impl CentralManagerEventStream {
             _handle: Subscription::new(
                 manager.as_raw(),
                 sender,
-                central_manager_event_cb,
                 crate::ffi::cb_central_manager_stream_subscribe,
                 crate::ffi::cb_central_manager_stream_unsubscribe,
             ),
@@ -440,13 +500,13 @@ impl CentralManagerEventStream {
     }
 
     /// Await the next event. Returns `None` when the stream is closed.
-    pub fn next(&self) -> NextItem<'_, CentralManagerEvent> {
-        self.inner.next()
+    pub fn next(&self) -> NextEvent<'_, CentralManagerEvent> {
+        next_event(&self.inner, central_manager_event_from_envelope)
     }
 
     /// Non-blocking: returns the next buffered event, or `None` if the buffer is empty.
     pub fn try_next(&self) -> Option<CentralManagerEvent> {
-        self.inner.try_next()
+        try_next_event(&self.inner, central_manager_event_from_envelope)
     }
 
     /// Returns the number of currently buffered events.
@@ -548,12 +608,13 @@ pub enum PeripheralEvent {
     },
 }
 
-fn peripheral_event_from_envelope(env: EventEnvelope) -> Option<PeripheralEvent> {
+fn peripheral_event_from_envelope(env: &mut EventEnvelope) -> Option<PeripheralEvent> {
     match env.event.as_str() {
         "didUpdateName" => Some(PeripheralEvent::DidUpdateName),
         "didModifyServices" => Some(PeripheralEvent::DidModifyServices {
             invalidated_services: env
                 .invalidated_service_handles
+                .take()
                 .unwrap_or_default()
                 .into_iter()
                 .map(Service::from_retained_handle)
@@ -562,81 +623,79 @@ fn peripheral_event_from_envelope(env: EventEnvelope) -> Option<PeripheralEvent>
         "didDiscoverServices" => Some(PeripheralEvent::DidDiscoverServices {
             services: env
                 .service_handles
+                .take()
                 .unwrap_or_default()
                 .into_iter()
                 .map(Service::from_retained_handle)
                 .collect(),
-            error: env.error,
+            error: env.error.take(),
         }),
         "didDiscoverIncludedServicesForService" => {
             Some(PeripheralEvent::DidDiscoverIncludedServices {
-                service: Service::from_retained_handle(env.service_handle?),
-                error: env.error,
+                service: Service::from_retained_handle(env.service_handle.take()?),
+                error: env.error.take(),
             })
         }
         "didDiscoverCharacteristicsForService" => {
             Some(PeripheralEvent::DidDiscoverCharacteristics {
-                service: Service::from_retained_handle(env.service_handle?),
+                service: Service::from_retained_handle(env.service_handle.take()?),
                 characteristics: env
                     .characteristic_handles
+                    .take()
                     .unwrap_or_default()
                     .into_iter()
                     .map(Characteristic::from_retained_handle)
                     .collect(),
-                error: env.error,
+                error: env.error.take(),
             })
         }
         "didUpdateValueForCharacteristic" => Some(PeripheralEvent::DidUpdateCharacteristicValue {
-            characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
-            error: env.error,
+            characteristic: Characteristic::from_retained_handle(env.characteristic_handle.take()?),
+            error: env.error.take(),
         }),
         "didWriteValueForCharacteristic" => Some(PeripheralEvent::DidWriteCharacteristicValue {
-            characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
-            error: env.error,
+            characteristic: Characteristic::from_retained_handle(env.characteristic_handle.take()?),
+            error: env.error.take(),
         }),
         "didUpdateNotificationStateForCharacteristic" => {
             Some(PeripheralEvent::DidUpdateNotificationState {
-                characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
-                error: env.error,
+                characteristic: Characteristic::from_retained_handle(
+                    env.characteristic_handle.take()?,
+                ),
+                error: env.error.take(),
             })
         }
         "didDiscoverDescriptorsForCharacteristic" => {
             Some(PeripheralEvent::DidDiscoverDescriptors {
-                characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
-                error: env.error,
+                characteristic: Characteristic::from_retained_handle(
+                    env.characteristic_handle.take()?,
+                ),
+                error: env.error.take(),
             })
         }
         "didUpdateValueForDescriptor" => Some(PeripheralEvent::DidUpdateDescriptorValue {
-            descriptor: Descriptor::from_retained_handle(env.descriptor_handle?),
-            error: env.error,
+            descriptor: Descriptor::from_retained_handle(env.descriptor_handle.take()?),
+            error: env.error.take(),
         }),
         "didWriteValueForDescriptor" => Some(PeripheralEvent::DidWriteDescriptorValue {
-            descriptor: Descriptor::from_retained_handle(env.descriptor_handle?),
-            error: env.error,
+            descriptor: Descriptor::from_retained_handle(env.descriptor_handle.take()?),
+            error: env.error.take(),
         }),
         "isReadyToSendWriteWithoutResponse" => {
             Some(PeripheralEvent::IsReadyToSendWriteWithoutResponse)
         }
         "didReadRSSI" => Some(PeripheralEvent::DidReadRssi {
             rssi: env.rssi.unwrap_or_default(),
-            error: env.error,
+            error: env.error.take(),
         }),
         "didOpenL2CAPChannel" => Some(PeripheralEvent::DidOpenL2capChannel {
-            channel: env.channel_handle.map(L2capChannel::from_retained_handle),
-            error: env.error,
+            channel: env
+                .channel_handle
+                .take()
+                .map(L2capChannel::from_retained_handle),
+            error: env.error.take(),
         }),
         _ => None,
-    }
-}
-
-unsafe extern "C" fn peripheral_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    unsafe {
-        deliver_event(
-            ctx,
-            payload,
-            "peripheral_event_cb",
-            peripheral_event_from_envelope,
-        );
     }
 }
 
@@ -645,8 +704,8 @@ unsafe extern "C" fn peripheral_event_cb(ctx: *mut c_void, payload: *const c_cha
 /// Subscribe with [`PeripheralEventStream::subscribe`] and
 /// await events with `.next().await`.
 pub struct PeripheralEventStream {
-    inner: BoundedAsyncStream<PeripheralEvent>,
-    _handle: Subscription<PeripheralEvent>,
+    inner: BoundedAsyncStream<EventEnvelope>,
+    _handle: Subscription,
 }
 
 impl PeripheralEventStream {
@@ -661,7 +720,6 @@ impl PeripheralEventStream {
             _handle: Subscription::new(
                 peripheral.as_raw(),
                 sender,
-                peripheral_event_cb,
                 crate::ffi::cb_peripheral_stream_subscribe,
                 crate::ffi::cb_peripheral_stream_unsubscribe,
             ),
@@ -669,13 +727,13 @@ impl PeripheralEventStream {
     }
 
     /// Await the next event. Returns `None` when the stream is closed.
-    pub fn next(&self) -> NextItem<'_, PeripheralEvent> {
-        self.inner.next()
+    pub fn next(&self) -> NextEvent<'_, PeripheralEvent> {
+        next_event(&self.inner, peripheral_event_from_envelope)
     }
 
     /// Non-blocking pop.
     pub fn try_next(&self) -> Option<PeripheralEvent> {
-        self.inner.try_next()
+        try_next_event(&self.inner, peripheral_event_from_envelope)
     }
 
     /// Returns the number of currently buffered events.
@@ -755,34 +813,37 @@ pub enum PeripheralManagerEvent {
     },
 }
 
-fn peripheral_manager_event_from_envelope(env: EventEnvelope) -> Option<PeripheralManagerEvent> {
+fn peripheral_manager_event_from_envelope(
+    env: &mut EventEnvelope,
+) -> Option<PeripheralManagerEvent> {
     match env.event.as_str() {
         "didUpdateState" => Some(PeripheralManagerEvent::StateChanged {
             state: PeripheralManagerState::from_raw(env.state.unwrap_or_default()),
             authorization: ManagerAuthorization::from_raw(env.authorization.unwrap_or_default()),
         }),
-        "didStartAdvertising" => {
-            Some(PeripheralManagerEvent::DidStartAdvertising { error: env.error })
-        }
+        "didStartAdvertising" => Some(PeripheralManagerEvent::DidStartAdvertising {
+            error: env.error.take(),
+        }),
         "didAddService" => Some(PeripheralManagerEvent::DidAddService {
-            service: Service::from_retained_handle(env.service_handle?),
-            error: env.error,
+            service: Service::from_retained_handle(env.service_handle.take()?),
+            error: env.error.take(),
         }),
         "didSubscribeToCharacteristic" => Some(PeripheralManagerEvent::DidSubscribeCentral {
-            central: Central::from_retained_handle(env.central_handle?),
-            characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
+            central: Central::from_retained_handle(env.central_handle.take()?),
+            characteristic: Characteristic::from_retained_handle(env.characteristic_handle.take()?),
         }),
         "didUnsubscribeFromCharacteristic" => Some(PeripheralManagerEvent::DidUnsubscribeCentral {
-            central: Central::from_retained_handle(env.central_handle?),
-            characteristic: Characteristic::from_retained_handle(env.characteristic_handle?),
+            central: Central::from_retained_handle(env.central_handle.take()?),
+            characteristic: Characteristic::from_retained_handle(env.characteristic_handle.take()?),
         }),
         "isReadyToUpdateSubscribers" => Some(PeripheralManagerEvent::IsReadyToUpdateSubscribers),
         "didReceiveReadRequest" => Some(PeripheralManagerEvent::DidReceiveReadRequest {
-            request: AttRequest::from_retained_handle(env.request_handle?),
+            request: AttRequest::from_retained_handle(env.request_handle.take()?),
         }),
         "didReceiveWriteRequests" => Some(PeripheralManagerEvent::DidReceiveWriteRequests {
             requests: env
                 .request_handles
+                .take()
                 .unwrap_or_default()
                 .into_iter()
                 .map(AttRequest::from_retained_handle)
@@ -790,35 +851,27 @@ fn peripheral_manager_event_from_envelope(env: EventEnvelope) -> Option<Peripher
         }),
         "didPublishL2CAPChannel" => Some(PeripheralManagerEvent::DidPublishL2capChannel {
             psm: env.psm.unwrap_or_default(),
-            error: env.error,
+            error: env.error.take(),
         }),
         "didUnpublishL2CAPChannel" => Some(PeripheralManagerEvent::DidUnpublishL2capChannel {
             psm: env.psm.unwrap_or_default(),
-            error: env.error,
+            error: env.error.take(),
         }),
         "didOpenL2CAPChannel" => Some(PeripheralManagerEvent::DidOpenL2capChannel {
-            channel: env.channel_handle.map(L2capChannel::from_retained_handle),
-            error: env.error,
+            channel: env
+                .channel_handle
+                .take()
+                .map(L2capChannel::from_retained_handle),
+            error: env.error.take(),
         }),
         _ => None,
     }
 }
 
-unsafe extern "C" fn peripheral_manager_event_cb(ctx: *mut c_void, payload: *const c_char) {
-    unsafe {
-        deliver_event(
-            ctx,
-            payload,
-            "peripheral_manager_event_cb",
-            peripheral_manager_event_from_envelope,
-        );
-    }
-}
-
 /// Async event stream for a [`PeripheralManager`].
 pub struct PeripheralManagerEventStream {
-    inner: BoundedAsyncStream<PeripheralManagerEvent>,
-    _handle: Subscription<PeripheralManagerEvent>,
+    inner: BoundedAsyncStream<EventEnvelope>,
+    _handle: Subscription,
 }
 
 impl PeripheralManagerEventStream {
@@ -833,7 +886,6 @@ impl PeripheralManagerEventStream {
             _handle: Subscription::new(
                 manager.as_raw(),
                 sender,
-                peripheral_manager_event_cb,
                 crate::ffi::cb_peripheral_manager_stream_subscribe,
                 crate::ffi::cb_peripheral_manager_stream_unsubscribe,
             ),
@@ -841,13 +893,13 @@ impl PeripheralManagerEventStream {
     }
 
     /// Await the next event. Returns `None` when the stream is closed.
-    pub fn next(&self) -> NextItem<'_, PeripheralManagerEvent> {
-        self.inner.next()
+    pub fn next(&self) -> NextEvent<'_, PeripheralManagerEvent> {
+        next_event(&self.inner, peripheral_manager_event_from_envelope)
     }
 
     /// Non-blocking pop.
     pub fn try_next(&self) -> Option<PeripheralManagerEvent> {
-        self.inner.try_next()
+        try_next_event(&self.inner, peripheral_manager_event_from_envelope)
     }
 
     /// Returns the number of currently buffered events.
@@ -858,15 +910,17 @@ impl PeripheralManagerEventStream {
 
 #[cfg(test)]
 mod tests {
+    use core::ffi::c_void;
     use std::time::{Duration, Instant};
 
     use doom_fish_utils::stream::BoundedAsyncStream;
 
     use super::{
-        central_manager_event_cb, peripheral_manager_event_cb, CentralManagerEvent,
+        next_event, peripheral_manager_event_from_envelope, try_next_event, EventEnvelope,
         PeripheralManagerEvent, Subscription,
     };
-    use crate::{CentralManager, PeripheralManager};
+    use crate::private::retain_raw;
+    use crate::{BluetoothUuid, CentralManager, MutableService, PeripheralManager};
 
     fn closes_soon<T>(stream: &BoundedAsyncStream<T>) -> bool {
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -879,14 +933,41 @@ mod tests {
         stream.is_closed()
     }
 
+    fn retain_count(raw: *mut c_void) -> i64 {
+        unsafe { apple_cf::raw::CFGetRetainCount(raw.cast_const().cast()) }
+    }
+
+    fn envelope(json: &str) -> EventEnvelope {
+        serde_json::from_str(json).expect("event envelope")
+    }
+
+    fn block_on<F: core::future::Future>(future: F) -> F::Output {
+        struct Unpark(std::thread::Thread);
+
+        impl std::task::Wake for Unpark {
+            fn wake(self: std::sync::Arc<Self>) {
+                self.0.unpark();
+            }
+        }
+
+        let waker = std::sync::Arc::new(Unpark(std::thread::current())).into();
+        let mut context = std::task::Context::from_waker(&waker);
+        let mut future = core::pin::pin!(future);
+        loop {
+            if let std::task::Poll::Ready(output) = future.as_mut().poll(&mut context) {
+                return output;
+            }
+            std::thread::park_timeout(Duration::from_millis(50));
+        }
+    }
+
     #[test]
     fn unsubscribing_releases_the_swift_sink_and_its_sender() {
         let manager = CentralManager::new().expect("central manager");
-        let (stream, sender) = BoundedAsyncStream::<CentralManagerEvent>::new(4);
+        let (stream, sender) = BoundedAsyncStream::<EventEnvelope>::new(4);
         let subscription = Subscription::new(
             manager.as_raw(),
             sender,
-            central_manager_event_cb,
             crate::ffi::cb_central_manager_stream_subscribe,
             crate::ffi::cb_central_manager_stream_unsubscribe,
         );
@@ -900,11 +981,10 @@ mod tests {
     #[test]
     fn a_subscription_keeps_a_dropped_manager_alive_until_it_unsubscribes() {
         let manager = PeripheralManager::new().expect("peripheral manager");
-        let (stream, sender) = BoundedAsyncStream::<PeripheralManagerEvent>::new(4);
+        let (stream, sender) = BoundedAsyncStream::<EventEnvelope>::new(4);
         let subscription = Subscription::new(
             manager.as_raw(),
             sender,
-            peripheral_manager_event_cb,
             crate::ffi::cb_peripheral_manager_stream_subscribe,
             crate::ffi::cb_peripheral_manager_stream_unsubscribe,
         );
@@ -914,5 +994,84 @@ mod tests {
 
         drop(subscription);
         assert!(closes_soon(&stream));
+    }
+
+    #[test]
+    fn envelopes_release_every_handle_that_no_event_adopted() {
+        let uuid =
+            BluetoothUuid::from_string("7a4f0a2e-4a0d-4c21-9e53-5d0b1f7a6c11").expect("uuid");
+        let service = MutableService::new(&uuid, true).expect("service");
+        let before = retain_count(service.raw);
+        let handle = || retain_raw(service.raw) as usize;
+
+        let mut unknown = envelope(&format!(
+            r#"{{"event":"somethingNew","service_handle":{},"request_handles":[{},{}]}}"#,
+            handle(),
+            handle(),
+            handle()
+        ));
+        assert_eq!(retain_count(service.raw), before + 3);
+        assert!(peripheral_manager_event_from_envelope(&mut unknown).is_none());
+        drop(unknown);
+        assert_eq!(retain_count(service.raw), before);
+
+        let mut added = envelope(&format!(
+            r#"{{"event":"didAddService","service_handle":{},"characteristic_handles":[{}]}}"#,
+            handle(),
+            handle()
+        ));
+        let event = peripheral_manager_event_from_envelope(&mut added);
+        assert!(matches!(
+            event,
+            Some(PeripheralManagerEvent::DidAddService { .. })
+        ));
+        drop(added);
+        assert_eq!(retain_count(service.raw), before + 1);
+        drop(event);
+        assert_eq!(retain_count(service.raw), before);
+    }
+
+    #[test]
+    fn streams_skip_envelopes_that_are_not_events_and_build_events_where_they_are_polled() {
+        let uuid =
+            BluetoothUuid::from_string("0c1b6f2d-8e52-4f7a-a1d3-6b2e9c4f5a70").expect("uuid");
+        let service = MutableService::new(&uuid, true).expect("service");
+        let before = retain_count(service.raw);
+        let (stream, sender) = BoundedAsyncStream::<EventEnvelope>::new(8);
+
+        let producer = std::thread::spawn({
+            let first = retain_raw(service.raw) as usize;
+            let second = retain_raw(service.raw) as usize;
+            move || {
+                sender.push(envelope(&format!(
+                    r#"{{"event":"somethingNew","service_handle":{first}}}"#
+                )));
+                sender.push(envelope(&format!(
+                    r#"{{"event":"didAddService","service_handle":{second}}}"#
+                )));
+                sender.push(envelope(r#"{"event":"isReadyToUpdateSubscribers"}"#));
+            }
+        });
+        producer.join().expect("producer");
+
+        let added = block_on(next_event(&stream, peripheral_manager_event_from_envelope));
+        let Some(PeripheralManagerEvent::DidAddService {
+            service: added,
+            error,
+        }) = added
+        else {
+            panic!("expected the service event after the skipped envelope");
+        };
+        assert!(error.is_none());
+        assert_eq!(retain_count(service.raw), before + 1);
+        drop(added);
+        assert_eq!(retain_count(service.raw), before);
+
+        assert!(matches!(
+            try_next_event(&stream, peripheral_manager_event_from_envelope),
+            Some(PeripheralManagerEvent::IsReadyToUpdateSubscribers)
+        ));
+        assert!(try_next_event(&stream, peripheral_manager_event_from_envelope).is_none());
+        assert!(block_on(next_event(&stream, peripheral_manager_event_from_envelope)).is_none());
     }
 }
