@@ -922,6 +922,16 @@ mod tests {
     use crate::private::retain_raw;
     use crate::{BluetoothUuid, CentralManager, MutableService, PeripheralManager};
 
+    fn live_tests_enabled() -> bool {
+        let enabled = std::env::var("COREBLUETOOTH_LIVE_TESTS").as_deref() == Ok("1");
+        if !enabled {
+            eprintln!(
+                "skip: set COREBLUETOOTH_LIVE_TESTS=1 to run tests that create Bluetooth managers"
+            );
+        }
+        enabled
+    }
+
     fn closes_soon<T>(stream: &BoundedAsyncStream<T>) -> bool {
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
@@ -963,6 +973,9 @@ mod tests {
 
     #[test]
     fn unsubscribing_releases_the_swift_sink_and_its_sender() {
+        if !live_tests_enabled() {
+            return;
+        }
         let manager = CentralManager::new().expect("central manager");
         let (stream, sender) = BoundedAsyncStream::<EventEnvelope>::new(4);
         let subscription = Subscription::new(
@@ -980,6 +993,9 @@ mod tests {
 
     #[test]
     fn a_subscription_keeps_a_dropped_manager_alive_until_it_unsubscribes() {
+        if !live_tests_enabled() {
+            return;
+        }
         let manager = PeripheralManager::new().expect("peripheral manager");
         let (stream, sender) = BoundedAsyncStream::<EventEnvelope>::new(4);
         let subscription = Subscription::new(

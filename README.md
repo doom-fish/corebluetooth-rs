@@ -64,6 +64,8 @@ cargo test --all-features
 cargo run --example 14_async_central --features async
 ```
 
+Tests that create a `CBCentralManager` or `CBPeripheralManager`, which can raise the Bluetooth permission prompt, run only with `COREBLUETOOTH_LIVE_TESTS=1`.
+
 ## Coverage notes
 
 See [`COVERAGE.md`](COVERAGE.md) for the framework-by-framework audit, including implemented APIs, intentionally skipped iOS-only members, and deprecated macOS-only symbols left out of the safe surface.

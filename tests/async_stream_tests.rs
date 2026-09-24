@@ -1,6 +1,8 @@
 //! Integration tests for the `async_api` stream module.
 #![cfg(feature = "async")]
 
+mod common;
+
 use corebluetooth::async_api::{
     CentralManagerEvent, CentralManagerEventStream, PeripheralManagerEventStream,
 };
@@ -8,6 +10,9 @@ use corebluetooth::{CentralManager, PeripheralManager};
 
 #[test]
 fn central_stream_subscribe_and_drop_is_safe() {
+    if !common::live_tests_enabled() {
+        return;
+    }
     let manager = CentralManager::new().expect("CentralManager::new");
     let stream = CentralManagerEventStream::subscribe(&manager, 8);
     drop(stream);
@@ -15,6 +20,9 @@ fn central_stream_subscribe_and_drop_is_safe() {
 
 #[test]
 fn central_stream_subscribe_twice_is_safe() {
+    if !common::live_tests_enabled() {
+        return;
+    }
     let manager = CentralManager::new().expect("CentralManager::new");
     let stream1 = CentralManagerEventStream::subscribe(&manager, 8);
     let stream2 = CentralManagerEventStream::subscribe(&manager, 8);
@@ -24,6 +32,9 @@ fn central_stream_subscribe_twice_is_safe() {
 
 #[test]
 fn peripheral_manager_stream_subscribe_and_drop_is_safe() {
+    if !common::live_tests_enabled() {
+        return;
+    }
     let manager = PeripheralManager::new().expect("PeripheralManager::new");
     let stream = PeripheralManagerEventStream::subscribe(&manager, 8);
     drop(stream);
@@ -31,6 +42,9 @@ fn peripheral_manager_stream_subscribe_and_drop_is_safe() {
 
 #[test]
 fn central_state_change_event_arrives_or_times_out() {
+    if !common::live_tests_enabled() {
+        return;
+    }
     let manager = CentralManager::new().expect("CentralManager::new");
     let stream = CentralManagerEventStream::subscribe(&manager, 8);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

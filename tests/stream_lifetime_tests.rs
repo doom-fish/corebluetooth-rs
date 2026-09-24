@@ -1,5 +1,7 @@
 #![cfg(feature = "async")]
 
+mod common;
+
 use std::{
     sync::mpsc,
     thread,
@@ -46,6 +48,9 @@ fn wait_for_added_service(stream: &PeripheralManagerEventStream) -> bool {
 
 #[test]
 fn streams_outlive_the_manager_they_were_subscribed_to() {
+    if !common::live_tests_enabled() {
+        return;
+    }
     let central = CentralManager::new().expect("central manager");
     let central_stream = CentralManagerEventStream::subscribe(&central, 8);
     let peripheral = PeripheralManager::new().expect("peripheral manager");
@@ -61,6 +66,9 @@ fn streams_outlive_the_manager_they_were_subscribed_to() {
 
 #[test]
 fn dropped_streams_are_never_reattached_as_delegates() -> Result<(), Box<dyn std::error::Error>> {
+    if !common::live_tests_enabled() {
+        return Ok(());
+    }
     let manager = PeripheralManager::new()?;
     if !powered_on(&manager) {
         return Ok(());
@@ -80,6 +88,9 @@ fn dropped_streams_are_never_reattached_as_delegates() -> Result<(), Box<dyn std
 
 #[test]
 fn the_delegate_and_every_stream_receive_each_event() -> Result<(), Box<dyn std::error::Error>> {
+    if !common::live_tests_enabled() {
+        return Ok(());
+    }
     let (added, added_rx) = mpsc::channel();
     let manager = PeripheralManager::with_callbacks(
         PeripheralManagerCallbacks::new().on_add_service(move |_, _| {
@@ -112,6 +123,9 @@ fn the_delegate_and_every_stream_receive_each_event() -> Result<(), Box<dyn std:
 #[test]
 fn dropping_a_stream_while_events_are_in_flight_is_safe() -> Result<(), Box<dyn std::error::Error>>
 {
+    if !common::live_tests_enabled() {
+        return Ok(());
+    }
     let manager = PeripheralManager::new()?;
     if !powered_on(&manager) {
         return Ok(());
