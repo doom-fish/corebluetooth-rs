@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `PeripheralManagerEventStream::next` return `async_api::NextEvent<'_, E>`
   instead of `doom_fish_utils::stream::NextItem<'_, E>`. Awaiting it still
   yields `Option<E>`; like the events it builds, it is not `Send`.
+- **Breaking:** the `corebluetooth::central` module, a re-export of
+  `central_manager` kept since 0.2.0, is removed.
 - **Breaking:** the raw `ffi` stream functions take context retain/release
   callbacks and return a sink handle; `cb_peripheral_clear_delegate` takes the
   delegate's context; `cb_characteristic_value_json` and
@@ -70,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   streams.
 - `ffi::cb_manager_detach_delegate` and
   `ffi::cb_peripheral_manager_detach_delegate`.
+
+### Removed
+
+- `corebluetooth::central`; use `corebluetooth::central_manager` or the
+  crate-root re-exports.
 
 ## [0.3.6] - 2026-05-20
 
